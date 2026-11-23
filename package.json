@@ -1,0 +1,30 @@
+{
+  "name": "citra-studio",
+  "version": "1.1.0",
+  "description": "Desktop lab for digital image processing",
+  "author": "Citra Studio",
+  "private": true,
+  "main": "app/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1",
+    "check": "node --check app/main.cjs && node --check app/bridge.cjs && node --check app/preload.cjs && node --check app/reorder.js && node --check app/comparison.js && node --check app/studio.js"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "id.citra.studio",
+    "productName": "Citra Studio",
+    "artifactName": "Citra-Studio-Windows-x64.exe",
+    "directories": { "output": ".build/package" },
+    "files": ["app/**", "engine/methods.json", "package.json"],
+    "extraResources": [
+      { "from": ".build/engine-dist/citra-engine", "to": "engine" }
+    ],
+    "electronLanguages": ["en-US", "id"],
+    "win": { "target": "portable", "icon": "app/icon.ico" },
+    "portable": { "requestExecutionLevel": "user", "unpackDirName": true }
+  }
+}

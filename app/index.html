@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src blob:; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Citra Studio</title>
+  <link rel="stylesheet" href="studio.css">
+  <script src="reorder.js" defer></script>
+  <script src="comparison.js" defer></script>
+  <script src="studio.js" defer></script>
+</head>
+<body>
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><symbol id="i-logo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="9" r="1.4" fill="currentColor" stroke="none"/><path d="m3.5 16 5-4.2 3.6 3.1 4-4.5 4.4 4.4"/></symbol>
+<symbol id="i-workspace" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M10 9v11"/></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><path d="M10 3 8 21M16 3l-2 18M4 9h16M3 15h16"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.3" cy="9" r="1.3"/><path d="m3.5 16.5 4.5-4.1 4.2 3.6 3.8-4.5 4.5 4.3"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="m15 10 6-3v10l-6-3z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14m6-14v14" stroke-width="3"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 6h4l1.7-2h4.6L16 6h4a1.8 1.8 0 0 1 2 2v10a1.8 1.8 0 0 1-2 2H4a1.8 1.8 0 0 1-2-2V8a1.8 1.8 0 0 1 2-2Z"/><circle cx="12" cy="12.7" r="3.3"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 4v16h18M7 16v-5m4 5V7m4 9v-3m4 3V5"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1.2-1.5 2.4m0 3h.01"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-maximize" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 6V4h11v11h-2"/><rect x="4" y="8" width="12" height="12" rx="1"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+<symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 4v4m8 2v4m-6 2v4" stroke-width="3"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm9 9-9 5-9-5m18 4-9 5-9-5"/></symbol>
+<symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3m-9-9-3 3 3 3m12-6 3 3-3 3"/></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3c-5 0-9 3.5-9 8.8 0 4.2 3.2 8.4 8 8.4 1.5 0 2-.8 1.7-2-.5-1.8.9-2.5 2.6-2.4 3.6.1 5.7-2.1 5.7-5C21 6.1 16.7 3 12 3Z"/><path d="M7.5 11h.01M10 7.5h.01M14.2 7.2h.01m3.3 3h.01" stroke-width="2.8"/></symbol>
+<symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 9V4h5m8 0h5v5m0 6v5h-5m-8 0H3v-5m3-3h12"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h2.5l2.7-7 3.2 14 3.7-14 3 14 2.7-7H22"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h5l2.8-7 4.1 14 2.8-7H22"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M3 7h18V4H3zm6 5h6"/></symbol>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 3v3m6-3v3m-6 12v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 19v-4m5 4v-7m5 7V8m5 11V4" stroke-width="2.5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v11m-4-4 4 4 4-4M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01m7 0h.01m7 0h.01" stroke-width="3.4"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="m8 19 11-11m-5 11 5-5m-11 0 6-6" stroke-width="1.5"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5M4 15v5h5"/></symbol>
+<symbol id="i-collapse" viewBox="0 0 24 24"><path d="M4 9h5V4m11 5h-5V4m0 16v-5h5M9 20v-5H4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></symbol>
+<symbol id="i-warning" viewBox="0 0 24 24"><path d="M10.4 4.8a1.8 1.8 0 0 1 3.2 0l7.3 12.7a1.8 1.8 0 0 1-1.6 2.7H4.7a1.8 1.8 0 0 1-1.6-2.7zM12 9v4m0 3.3h.01"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 18.5v-12A2 2 0 0 1 5 4.5h4.2l2.1 2.4H19a2 2 0 0 1 2 2v9.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z"/></symbol>
+<symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 3h4m-3 0v7l-5 7.5A2.1 2.1 0 0 0 7.8 21h8.4a2.1 2.1 0 0 0 1.8-3.5L13 10V3M8.6 15h6.8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.3 3 7.6 7.5 9.5 4.5-1.9 7.5-5.2 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 9a7.7 7.7 0 1 0 .2 5m0-10v5h-5"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="m9 4 6 0m-5 0v5l-3 4v2h10v-2l-3-4V4m-2 11v6"/></symbol></svg>
+  <header class="titlebar">
+    <div class="title-left"><span class="title-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"></use></svg></span><span>Citra Studio</span></div>
+    <div class="title-center">Image processing lab</div>
+    <div class="window-actions">
+      <button type="button" id="minimize" class="window-button" aria-label="Minimize" title="Minimize" ><svg class="icon" aria-hidden="true"><use href="#i-minus"></use></svg></button>
+      <button type="button" id="maximize" class="window-button" aria-label="Maximize" title="Maximize" ><svg class="icon" aria-hidden="true"><use href="#i-maximize"></use></svg></button>
+      <button type="button" id="close-window" class="window-button window-close" aria-label="Hide to tray" title="Hide to tray"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" aria-label="Studio navigation">
+      <button id="home" class="rail-brand" type="button" aria-label="Citra Studio workspace" title="Citra Studio"><svg class="icon" aria-hidden="true"><use href="#i-logo"></use></svg></button>
+      <span class="rail-separator"></span>
+      <button type="button" id="rail-workspace" class="rail-button active" aria-label="Workspace" title="Workspace" ><svg class="icon" aria-hidden="true"><use href="#i-workspace"></use></svg></button>
+      <button type="button" id="rail-debug" class="rail-button" aria-label="Processing debug" title="Processing debug" ><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg></button>
+      <span class="rail-spacer"></span>
+      <button type="button" id="help" class="rail-button" aria-label="Workspace help" title="Workspace help" ><svg class="icon" aria-hidden="true"><use href="#i-help"></use></svg></button>
+    </nav>
+
+    <aside class="library" aria-label="Method library">
+      <header class="library-header"><strong>Method library</strong><span id="method-count" class="count"></span></header>
+      <div class="library-search">
+        <label class="searchbox" for="search"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg><input id="search" type="search" placeholder="Find a method" autocomplete="off" aria-label="Find a method"><kbd>/</kbd></label>
+      </div>
+      <div class="library-intro"><span class="eyebrow">PROCESSING METHODS</span><span>Click to add or drag onto the canvas.</span></div>
+      <div id="method-list" class="method-list"></div>
+      <div id="batch-bar" class="batch-bar" hidden><span id="batch-count"></span><button id="add-batch" class="small-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg> Add</button></div>
+      <div class="engine-anchor">
+        <button id="engine-status" class="engine-status" type="button" aria-expanded="false" aria-controls="engine-popover">
+          <span class="engine-avatar"><svg class="icon" aria-hidden="true"><use href="#i-chip"></use></svg><span id="engine-indicator" class="indicator"></span></span>
+          <span class="engine-text"><strong>Local engine</strong><small id="engine-caption">Starting Python…</small></span>
+          <svg class="icon" aria-hidden="true"><use href="#i-signal"></use></svg>
+        </button>
+        <div id="engine-popover" class="engine-popover" hidden>
+          <div class="popover-heading"><strong>Processing connection</strong><span id="popover-status" class="live-dot"></span></div>
+          <div id="popover-chart" class="mini-chart"></div>
+          <div class="popover-metrics"><span>Last round trip</span><strong id="popover-latency">—</strong></div>
+          <div class="popover-metrics"><span>Processed frames</span><strong id="popover-frames">0</strong></div>
+          <button id="open-debug" class="small-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-terminal"></use></svg> Open Debug</button>
+          <small><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> Processing stays on this device</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="workspace" aria-label="Workspace">
+      <header class="channel-header">
+        <div class="channel-ident"><svg class="icon" aria-hidden="true"><use href="#i-hash"></use></svg><h1>workspace</h1><span class="channel-divider"></span><span class="channel-context">Photo &amp; webcam</span></div>
+        <div class="channel-actions">
+          <button type="button" id="open-photo" class="icon-button" aria-label="Pick a photo (Ctrl+O)" title="Pick a photo (Ctrl+O)" ><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></button>
+          <button type="button" id="toggle-camera" class="icon-button" aria-label="Start webcam" title="Start webcam" ><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg></button>
+          <span class="channel-divider"></span>
+          <button type="button" id="layout-toggle" class="icon-button" aria-label="Toggle focus layout" title="Toggle focus layout" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-grid"></use></svg></button>
+          <button type="button" id="toggle-inspector" class="icon-button" aria-label="Toggle telemetry" title="Toggle telemetry" aria-expanded="true" aria-controls="inspector"><svg class="icon" aria-hidden="true"><use href="#i-panel"></use></svg></button>
+        </div>
+      </header>
+
+      <div id="dropzone" class="stage">
+        <div id="welcome" class="welcome">
+          <div class="stage-corner"><span class="stage-corner-dot"></span><span>READY FOR INPUT</span></div>
+          <div class="welcome-content">
+            <svg class="welcome-art" viewBox="0 0 400 206" role="img" aria-label="Three image processing tiles">
+              <defs>
+                <linearGradient id="tile-fill" x1="0" y1="0" x2="0.1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#444ab0"/><stop offset="1" stop-color="#27265e"/></linearGradient>
+                <linearGradient id="sky-fill" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#7d82fc"/><stop offset="1" stop-color="#4142a7"/></linearGradient>
+                <clipPath id="art-crop"><rect x="112" y="55" width="176" height="99" rx="7"/></clipPath>
+              </defs>
+              <path d="M37 93h326M56 162h288M200 15v172" stroke="#8f91ff" opacity=".22" stroke-dasharray="4 7"/>
+              <circle cx="200" cy="101" r="83" stroke="#9da0ff" opacity=".18" fill="none"/>
+              <circle cx="52" cy="99" r="2.5" fill="#9fa2ff"/><circle cx="347" cy="152" r="2.5" fill="#9fa2ff"/>
+              <path d="M79 34v12m-6-6h12m242 4v14m-7-7h14m-18 123v9m-4.5-4.5h9" stroke="#b9bbff" stroke-width="1.5" stroke-linecap="round" opacity=".75"/>
+              <g transform="rotate(-11 104 111)">
+                <rect x="39" y="71" width="126" height="83" rx="10" fill="#22234a" stroke="#696fce"/>
+                <rect x="47" y="79" width="110" height="66" rx="6" fill="#2d3267"/>
+                <path d="m48 131 22-26 16 16 20-28 28 25 14-12 9 12" fill="none" stroke="#a0a5fe" stroke-width="1.5" opacity=".7"/>
+                <circle cx="77" cy="97" r="7" fill="none" stroke="#a0a5fe" opacity=".7"/>
+              </g>
+              <g transform="rotate(11 300 112)">
+                <rect x="237" y="70" width="126" height="84" rx="10" fill="#22234a" stroke="#696fce"/>
+                <rect x="245" y="78" width="110" height="67" rx="6" fill="#292c63"/>
+                <path d="M248 137h103m-96-1v-10m8 10v-19m8 19v-26m8 26v-20m8 20v-15m8 15v-33m8 33v-43m8 43v-32m8 32v-19m8 19v-24m8 24v-16m8 16v-9" stroke="#888ffe" stroke-width="2" stroke-linecap="round" opacity=".76"/>
+              </g>
+              <rect x="102" y="33" width="196" height="134" rx="12" fill="url(#tile-fill)" stroke="#9da1ff" stroke-width="1.4"/>
+              <circle cx="117" cy="45" r="2.3" fill="#d8d9ff"/><circle cx="125" cy="45" r="2.3" fill="#a9adf5"/><circle cx="133" cy="45" r="2.3" fill="#878be9"/>
+              <g clip-path="url(#art-crop)">
+                <rect x="112" y="55" width="176" height="99" fill="url(#sky-fill)"/>
+                <circle cx="250" cy="84" r="16" fill="#c9caff"/>
+                <path d="m110 146 46-49 19 17 29-32 49 48 19-19 20 17v32H110z" fill="#5d60ca"/>
+                <path d="m110 145 32-20 20 12 36-24 31 21 27-13 35 17v23H110z" fill="#4748a6"/>
+                <path d="m110 146 41-7 32 6 20-5 49 9 37-9v18H110z" fill="#323377"/>
+                <path d="m190 98 14-16 17 17-9-3-6 3-6-4z" fill="#c6c8fe"/>
+              </g>
+              <circle cx="200" cy="164" r="17" fill="#22234d" stroke="#a1a5ff"/>
+              <path d="M200 156v16m-8-8h16" stroke="#d4d6ff" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <h2>Pick a photo or start a webcam</h2>
+            <p>Drop a photo here, or start your camera to compare image processing methods live.</p>
+            <div class="welcome-actions">
+              <button id="welcome-photo" type="button" class="primary-button"><svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg> Pick a photo</button>
+              <button id="welcome-camera" type="button" class="secondary-button"><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg> Start webcam</button>
+            </div>
+            <button id="sample" type="button" class="text-button"><svg class="icon" aria-hidden="true"><use href="#i-flask"></use></svg> Open sample image</button>
+          </div>
+        </div>
+
+        <div id="active-stage" class="active-stage" hidden>
+          <div class="stage-heading"><div><span class="eyebrow">INPUT &amp; OUTPUTS</span><strong id="source-name"></strong></div><span id="active-count" class="count"></span></div>
+          <section id="pinned-tiles" class="pinned-shelf" aria-label="Pinned widgets" hidden>
+            <div class="shelf-heading"><svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg> Pinned widgets</div>
+            <div id="pinned-tile-grid" class="card-grid tile-grid"></div>
+          </section>
+          <div id="tile-scroll" class="card-scroll">
+            <div id="tiles" class="card-grid tile-grid"></div>
+            <button id="add-tile" class="add-tile" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg> <span>Drop a method here or browse the library</span></button>
+          </div>
+        </div>
+
+        <div class="drop-overlay" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg> <strong>Drop into workspace</strong></div>
+      </div>
+
+      <section id="comparison" class="comparison-drawer" aria-labelledby="comparison-title" hidden inert>
+        <header class="comparison-header">
+          <div class="comparison-ident">
+            <span class="comparison-mark"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
+            <div><h2 id="comparison-title">Compare methods</h2><p id="comparison-subtitle">Live histograms and processing metrics</p></div>
+          </div>
+          <div class="comparison-controls">
+            <div class="channel-switch" role="group" aria-label="Histogram channels">
+              <button id="compare-luma" type="button" aria-pressed="true" title="Luminance">Luma</button>
+              <button id="compare-rgb" type="button" aria-pressed="false" title="Red, green and blue channels">RGB</button>
+            </div>
+            <button id="compare-pause" type="button" class="icon-button" aria-label="Pause live histograms" title="Pause live histograms" aria-pressed="false" disabled><svg class="icon" aria-hidden="true"><use href="#i-pause"></use></svg></button>
+            <button id="compare-expand" type="button" class="icon-button" aria-label="Expand comparison" title="Expand comparison" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>
+            <button id="compare-close" type="button" class="icon-button" aria-label="Close comparison" title="Close comparison"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+          </div>
+        </header>
+        <div class="comparison-strip">
+          <span id="comparison-status" class="comparison-status"><span class="live-dot"></span><span>Awaiting source</span></span>
+          <button id="comparison-scale" type="button" class="seg-toggle" aria-pressed="true" title="Switch between shared and per-card histogram scales">Shared scale · % of pixels</button>
+          <button id="compare-cursor" class="text-button compact" type="button" hidden>Clear locked bin</button>
+        </div>
+        <div class="comparison-body">
+          <div id="comparison-empty" class="comparison-empty"><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg><strong>Waiting for a source</strong><p>Open a photo or start the webcam to compare pixel distributions.</p></div>
+          <section id="pinned-comparison" class="pinned-shelf" aria-label="Pinned histograms" hidden>
+            <div class="shelf-heading"><svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg> Pinned histograms</div>
+            <div id="pinned-comparison-grid" class="card-grid comparison-grid"></div>
+          </section>
+          <div id="comparison-scroll" class="card-scroll">
+            <div id="comparison-grid" class="card-grid comparison-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="dock">
+        <div class="dock-status"><span id="source-dot" class="live-dot"></span><span id="source-state">No source</span></div>
+        <div class="dock-buttons">
+          <button type="button" id="dock-photo" class="dock-button" aria-label="Pick a photo" title="Pick a photo" ><svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg></button>
+          <button type="button" id="dock-camera" class="dock-button" aria-label="Start webcam" title="Start webcam" ><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg></button>
+          <button type="button" id="dock-snapshot" class="dock-button" aria-label="Freeze webcam frame" title="Freeze webcam frame" disabled><svg class="icon" aria-hidden="true"><use href="#i-camera"></use></svg></button>
+          <button type="button" id="dock-save" class="dock-button" aria-label="Save selected image (Ctrl+S)" title="Save selected image (Ctrl+S)" disabled><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
+          <button type="button" id="dock-compare" class="dock-button" aria-label="Compare live telemetry" title="Compare live telemetry" aria-controls="comparison" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg></button>
+          <button type="button" id="dock-clear" class="dock-button danger" aria-label="Remove source" title="Remove source" disabled><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+        </div>
+        <div class="dock-status dock-end"><span id="footer-detail">Local processing</span></div>
+      </footer>
+    </main>
+
+    <aside id="inspector" class="inspector" aria-label="Processing telemetry">
+      <header class="inspector-header"><div><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg><strong>Telemetry</strong></div><button type="button" id="close-inspector" class="icon-button" aria-label="Close telemetry" title="Close telemetry" ><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button></header>
+      <div class="inspector-tabs" role="tablist" aria-label="Telemetry view">
+        <button id="hist-tab" class="tab" type="button" role="tab" aria-selected="true" aria-controls="hist-panel"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg> Histogram</button>
+        <button id="debug-tab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="debug-panel" tabindex="-1"><svg class="icon" aria-hidden="true"><use href="#i-terminal"></use></svg> Debug</button>
+      </div>
+
+      <section id="hist-panel" class="inspector-content" role="tabpanel" aria-labelledby="hist-tab" tabindex="0">
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">INSPECTING</span><span id="inspect-format" class="tag">IDLE</span></div>
+          <div id="inspect-title" class="inspect-title">Original source</div>
+          <p id="inspect-description" class="muted">Open a source to view its pixel distribution.</p>
+          <code id="formula" class="formula" hidden></code>
+        </div>
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">PIXEL DISTRIBUTION</span><button id="rgb-toggle" type="button" class="seg-toggle" aria-pressed="false" title="Switch to RGB channels" disabled>Y</button></div>
+          <div id="histogram" class="histogram" aria-label="Live intensity histogram"></div>
+          <div id="hist-legend" class="hist-legend"><span class="legend-luma"></span>Luminance</div>
+          <dl class="stats-grid">
+            <div><dt>Minimum</dt><dd id="stat-min">—</dd></div>
+            <div><dt>Maximum</dt><dd id="stat-max">—</dd></div>
+            <div><dt>Mean</dt><dd id="stat-mean">—</dd></div>
+            <div><dt>Std. dev.</dt><dd id="stat-stddev">—</dd></div>
+          </dl>
+        </div>
+        <div id="params-section" class="inspector-section" hidden>
+          <div class="section-title"><span class="eyebrow">PARAMETERS</span><button id="reset-params" type="button" class="text-button compact">Reset</button></div>
+          <div id="parameters" class="parameters"></div>
+          <dl id="calculation" class="detail-list" hidden></dl>
+        </div>
+        <div class="inspector-section reference-section">
+          <div class="section-title"><span class="eyebrow">REFERENCE PHOTO</span><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg></div>
+          <p id="reference-caption" class="muted">Optional input for two-image methods.</p>
+          <div class="reference-actions">
+            <button id="reference" type="button" class="small-button"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg> Choose reference</button>
+            <button type="button" id="clear-reference" class="icon-button" aria-label="Remove reference" title="Remove reference" hidden><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <section id="debug-panel" class="inspector-content" role="tabpanel" aria-labelledby="debug-tab" tabindex="0" hidden>
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">PIPELINE TIMING</span><span id="debug-latency" class="tag">—</span></div>
+          <div id="latency-chart" class="mini-chart tall"></div>
+          <dl class="stats-grid">
+            <div><dt>Engine</dt><dd id="debug-engine">—</dd></div>
+            <div><dt>Output rate</dt><dd id="debug-fps">—</dd></div>
+            <div><dt>Live frames</dt><dd id="debug-frames">0</dd></div>
+            <div><dt>Skipped frames</dt><dd id="debug-skips">0</dd></div>
+          </dl>
+        </div>
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">CURRENT FRAME</span><svg class="icon" aria-hidden="true"><use href="#i-scan"></use></svg></div>
+          <dl id="debug-frame" class="detail-list"></dl>
+          <div id="debug-methods" class="debug-methods"></div>
+        </div>
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">LOCAL ENGINE</span><svg class="icon" aria-hidden="true"><use href="#i-chip"></use></svg></div>
+          <dl id="debug-runtime" class="detail-list"></dl>
+        </div>
+        <div class="inspector-section">
+          <div class="section-title"><span class="eyebrow">SESSION EVENTS</span><svg class="icon" aria-hidden="true"><use href="#i-terminal"></use></svg></div>
+          <ol id="event-log" class="event-log"></ol>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="dialog-heading"><div><svg class="icon" aria-hidden="true"><use href="#i-help"></use></svg><h2 id="help-title">Workspace guide</h2></div><button type="button" id="close-help" class="icon-button" aria-label="Close guide" title="Close guide" ><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button></div>
+    <p>Each result widget processes the same source, so you can compare different methods or settings side by side.</p>
+    <dl class="guide-list">
+      <div><dt>Choose a source</dt><dd>Open or drop a photo, start the webcam, or load the sample.</dd></div>
+      <div><dt>Add methods</dt><dd>Click a method or drag it into the workspace. Hold Ctrl while clicking to select several methods, then drag them together or choose Add.</dd></div>
+      <div><dt>Arrange results</dt><dd>Grab the body or title of a tile to move it. Pin a tile to keep it in the top section. Drag its bottom corner to resize.</dd></div>
+      <div><dt>Inspect and save</dt><dd>Select a tile for its histogram, formula and settings. Save the selected image with the download button.</dd></div>
+      <div><dt>Compare live telemetry</dt><dd>Open the bottom dock waveform to compare histograms. Drag cards to reorder them, or click a chart to lock the same intensity bin across all cards.</dd></div>
+    </dl>
+    <div class="shortcut-row"><kbd>Ctrl+O</kbd> Open photo <kbd>Ctrl+S</kbd> Save image <kbd>/</kbd> Search methods</div>
+  </dialog>
+</body>
+</html>
