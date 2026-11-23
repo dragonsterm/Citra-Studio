@@ -1,47 +1,58 @@
 # Citra Studio
 
-Citra Studio adalah aplikasi pengolahan citra desktop untuk Windows x64. Antarmukanya memakai Electron dan pemrosesan berjalan lokal di Python 3.13.12 dengan OpenCV dan NumPy.
+Citra Studio is a desktop lab for learning and experimenting with digital image processing on Windows x64. The interface runs in Electron, and the app processes images locally using Python 3.13.12, OpenCV, and NumPy.
 
-## Pakai aplikasi
+## Download and run
 
-1. Jalankan `dist/Citra-Studio-Windows-x64.exe`. Paket portabel sudah membawa Electron, Python, dan model CNN.
-2. Pilih **Pick a photo**, jatuhkan foto dari Explorer, atau tekan **Start webcam**. **Open sample image** menyediakan citra latihan.
-3. Klik metode atau seret ke kanvas. Tahan **Ctrl** saat memilih beberapa metode, lalu seret pilihan atau tekan **Add**. Maksimal 12 widget hasil aktif, masing-masing memproses sumber yang sama.
-4. Tahan dan seret badan atau judul widget untuk memindahkannya di grid. Gunakan pin untuk mempertahankan widget di bagian atas saat menggulir hasil lain. Seret sudut kanan bawah untuk mengatur ukuran atau gunakan **Focus** untuk memperbesar satu widget.
-5. Pilih widget untuk melihat histogram, rumus, parameter, dan hasil perhitungannya. **Debug** menunjukkan waktu pemrosesan, waktu bolak-balik, FPS hasil webcam, dimensi, dan log sesi. Tambahkan **Reference photo** untuk operasi dua citra.
-6. Gunakan tombol unduh pada widget atau **Ctrl+S** untuk menyimpan hasil. **Freeze webcam frame** mengubah frame kamera menjadi foto yang dapat diproses dan disimpan.
-7. Buka **Compare live telemetry** dari tombol gelombang di dock bawah. Panel ini memperlihatkan histogram dan statistik untuk sumber serta semua hasil. Seret atau pin kartu histogram secara terpisah dari kanvas. Pilih **Luma** atau **RGB**, arahkan kursor ke grafik untuk membandingkan bin yang sama, dan klik untuk menguncinya.
+Open [GitHub Releases](https://github.com/dragonsterm/Citra-Studio/releases) and download `Citra-Studio-Windows-x64.exe` from the latest release's **Assets** section. Run the downloaded file to open the app. The portable build bundles Electron, the Python engine, and the pretrained models, so no separate installation is required.
 
-Foto dapat dibuka dalam format PNG, JPEG, WebP, BMP, dan TIFF hingga 48 MB dan 24 megapiksel. Hasil dapat disimpan sebagai PNG, JPEG, atau WebP. LSB memakai PNG agar bit pesan tetap utuh. Ekspor foto diproses ulang dari sumber asli. Dimensi hasil mengikuti operasinya, termasuk batas ukuran kerja pada metode seperti kompresi fraktal dan beberapa filter frekuensi.
+## Use the workspace
 
-Tombol minimize menurunkan jendela ke taskbar. Tombol **X** dan **Alt+F4** menyembunyikan jendela ke tray. Klik ikon tray untuk membuka kembali workspace, atau klik kanan dan pilih **Exit Citra Studio** untuk menutup aplikasi sepenuhnya. Pintasan taskbar **Pick a photo**, **Start webcam**, dan **Show telemetry** tersedia melalui Jump List. Webcam dilepas ketika jendela diminimalkan atau disembunyikan.
+1. Select **Pick a photo**, drag a photo in from File Explorer, or select **Start webcam**. Select **Open sample image** to try the app with a built-in image.
+2. Click a method or drag it onto the canvas. Hold **Ctrl** to select multiple methods, then drag the selection or click **Add**. You can keep up to 12 result widgets active, and each one processes the same source.
+3. Drag a widget by its body or title to move it in the grid. Pin it to keep it at the top while you scroll through other results. Drag its bottom-right corner to resize it or select **Focus** to enlarge it.
+4. Select a widget to see its histogram, formula, parameters, and calculated values. Open **Debug** to see processing time, round-trip time, webcam output FPS, dimensions, and session logs. Select **Reference photo** for operations that use two images.
+5. Use a widget's download button or press **Ctrl+S** to save a result. Select **Freeze webcam frame** to turn the current camera frame into a photo you can process and save.
+6. Use the waveform button in the bottom dock to open **Compare live telemetry**. It shows histograms and statistics for the source and each result. You can arrange and pin the histogram cards independently of the canvas. Choose **Luma** or **RGB**, hover over a chart to compare the same bin across cards, and click to lock the comparison.
 
-## Metode
+The app opens PNG, JPEG, WebP, BMP, and TIFF images up to 48 MB and 24 megapixels. Results can be saved as PNG, JPEG, or WebP. LSB output uses PNG to preserve the embedded bits. The app starts from the original image when exporting a photo. Output dimensions depend on the method, including working-size limits for fractal compression and some frequency filters.
 
-Katalog berisi 52 jenis widget dengan varian yang dapat dipilih di dalam widget. Histogram luminans dan RGB tersedia pada sumber dan hasil.
+Minimizing sends the window to the taskbar. **X** and **Alt+F4** hide it in the system tray. Click the tray icon to reopen the workspace, or right-click it and choose **Exit Citra Studio** to quit. The taskbar Jump List offers **Pick a photo**, **Start webcam**, and **Show telemetry**. The app releases the webcam when you minimize or hide the window.
 
-| Keluarga | Cakupan |
+## Processing methods
+
+The catalog includes 52 widget types. Some widgets offer multiple variants. Luminance and RGB histograms are available for both the source and results.
+
+| Category | Methods |
 | --- | --- |
-| Intensitas dan histogram | Grayscale, ambang tunggal dan ganda, negatif, brightness, contrast, gamma, log, bit plane, kuantisasi, aritmetika, Boolean, equalization, dan spesifikasi histogram |
-| Filter spasial dan CNN | Blur, smoothing, sharpening, konvolusi, emboss, sketch, feature map CNN, dan klasifikasi MobileNetV2 |
-| Geometri dan warna | Mirroring, rotasi, translasi, sampling, crop, koreksi geometrik, kanal model warna, pengaturan HSV, dan pseudo-color |
-| Tepi dan frekuensi | Gradien, Sobel, Prewitt, Roberts, Laplacian, LoG, DoG, Canny, kernel laporan, Hough, kontur, sudut, Fourier, DCT, dan filter frekuensi |
-| Derau dan restorasi | Derau aditif, impuls, periodik dan lainnya, peredam derau spasial, serta deblur Wiener, inverse filtering dan Richardson–Lucy |
-| Segmentasi dan biner | Otsu, multi-Otsu, ambang iteratif dan adaptif, region growing, split & merge, K-means, watershed, PP-HumanSeg, morfologi dan komponen terhubung |
-| Kompresi dan penyisipan | JPEG, PNG, WebP, Huffman, RLE, quadtree, DPCM, fraktal, watermark dan LSB |
+| Intensity and histograms | Grayscale, single and dual thresholding, negative, brightness, contrast, gamma and logarithmic transforms, bit planes, quantization, arithmetic and Boolean operations, histogram equalization, and histogram specification |
+| Spatial filters and CNNs | Blur, smoothing, sharpening, convolution, emboss, sketch, CNN feature maps, and MobileNetV2 classification |
+| Geometry and color | Mirroring, rotation, translation, sampling, cropping, geometric correction, color model channels, HSV adjustments, and pseudocolor |
+| Edges and frequency | Gradients, Sobel, Prewitt, Roberts, Laplacian, LoG, DoG, Canny, kernels from the course report, Hough transforms, contours, corners, Fourier transforms, DCT, and frequency filters |
+| Noise and restoration | Additive, impulse, periodic, and other noise types, spatial denoising, and deblurring with Wiener filtering, inverse filtering, and Richardson-Lucy deconvolution |
+| Segmentation and binary images | Otsu, multi-Otsu, iterative and adaptive thresholding, region growing, split and merge, K-means, watershed, PP-HumanSeg, morphology, and connected components |
+| Compression and data embedding | JPEG, PNG, WebP, Huffman coding, RLE, quadtree, DPCM, fractal compression, watermarking, and LSB |
 
-Acuan metode dan istilah berasal dari foto kelas, RPS, 26 modul, dan contoh proyek Mini Photoshop. [Folder materi Pengolahan Citra](https://drive.google.com/drive/folders/1jea0er4VFqNAwYMPu3uK_meaErxzBni5) · [Contoh proyek](https://drive.google.com/file/d/1qExm3pfyIgjp874wQNkqzUFNZ1QAhymk/view)
+The methods and terminology draw on images used in class, the course syllabus, 26 modules, and the Mini Photoshop example project. [Image processing course materials](https://drive.google.com/drive/folders/1jea0er4VFqNAwYMPu3uK_meaErxzBni5) · [Example project](https://drive.google.com/file/d/1qExm3pfyIgjp874wQNkqzUFNZ1QAhymk/view)
 
-Klasifikasi dan segmentasi semantik memakai model terlatih. Widget feature map memperlihatkan konvolusi, ReLU dan pooling sebagai simulasi pembelajaran. [MobileNetV2](https://github.com/opencv/opencv_zoo/tree/main/models/image_classification_mobilenet) · [PP-HumanSeg](https://github.com/opencv/opencv_zoo/tree/main/models/human_segmentation_pphumanseg)
+Image classification and human segmentation use pretrained models. The feature map widget demonstrates convolution, ReLU, and pooling in an educational simulation. [MobileNetV2](https://github.com/opencv/opencv_zoo/tree/main/models/image_classification_mobilenet) · [PP-HumanSeg](https://github.com/opencv/opencv_zoo/tree/main/models/human_segmentation_pphumanseg)
 
-## Build dari kode sumber
+## Build from source
 
-Pada Windows x64 dengan Node.js dan `uv` tersedia di PATH, jalankan dari folder proyek.
+On Windows x64, make sure Node.js and `uv` are on your PATH. From the project directory, run the build command.
 
 ```powershell
 npm.cmd run build
 ```
 
-Build menyiapkan Python 3.13.12 dengan `uv`, memverifikasi checksum model, lalu membuat `dist/Citra-Studio-Windows-x64.exe`. Build pertama memerlukan internet. Sesudah build, gunakan `npm.cmd start` untuk menjalankan versi pengembangan dan `npm.cmd run check` untuk memeriksa sintaks JavaScript.
+The first build requires an internet connection. The build sets up Python 3.13.12 with `uv`, verifies the model checksums, and creates `dist/Citra-Studio-Windows-x64.exe`. After building, use `npm.cmd start` to run the development version and `npm.cmd run check` to check JavaScript syntax.
 
-`app/` memuat antarmuka dan integrasi Windows. `engine/` memuat katalog, algoritma, dan mesin Python. `scripts/` memuat perakitan. Cache, dependensi terpasang, dan hasil build diabaikan oleh Git.
+- `app/` contains the interface and Windows integration.
+- `engine/` contains the method catalog, algorithms, and Python engine.
+- `scripts/` contains the packaging script.
+
+Git ignores caches, installed dependencies, and build output.
+
+## License
+
+The project is available under the [MIT License](LICENSE).
