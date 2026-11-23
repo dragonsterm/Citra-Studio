@@ -1,6 +1,6 @@
 # Citra Studio
 
-Citra Studio adalah lab pengolahan citra desktop untuk Windows x64. Antarmukanya memakai Electron dan pemrosesan berjalan lokal di Python 3.13.12 dengan OpenCV dan NumPy.
+Citra Studio adalah aplikasi pengolahan citra desktop untuk Windows x64. Antarmukanya memakai Electron dan pemrosesan berjalan lokal di Python 3.13.12 dengan OpenCV dan NumPy.
 
 ## Pakai aplikasi
 
