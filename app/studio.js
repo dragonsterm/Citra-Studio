@@ -1,8 +1,6 @@
 "use strict";
 
-const $ = (id) => document.getElementById(id);
 const api = window.studio;
-const svgNS = "http://www.w3.org/2000/svg";
 const maxWidgets = 12;
 const methodDrag = "application/x-citra-methods";
 const shell = document.querySelector(".shell");
@@ -48,42 +46,6 @@ let renderTimer = 0;
 let toastTimer = 0;
 let lastTelemetry = 0;
 let connecting;
-
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function svgNode(tag, attributes = {}) {
-  const node = document.createElementNS(svgNS, tag);
-  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
-  return node;
-}
-
-function icon(name) {
-  const svg = svgNode("svg", { class: "icon", "aria-hidden": "true" });
-  svg.append(svgNode("use", { href: "#i-" + name }));
-  return svg;
-}
-
-function button(name, title, className = "icon-button") {
-  const node = element("button", className);
-  node.type = "button";
-  node.title = title;
-  node.setAttribute("aria-label", title);
-  node.append(icon(name));
-  return node;
-}
-
-function replaceIcon(node, name, label) {
-  node.querySelector("use").setAttribute("href", "#i-" + name);
-  if (label) {
-    node.title = label;
-    node.setAttribute("aria-label", label);
-  }
-}
 
 function selectedWidget() {
   return state.widgets.find((widget) => widget.id === state.selected);
@@ -322,11 +284,11 @@ const workspaceBoard = createCardBoard({
 });
 workspaceBoard.add("source", sourceTile.node);
 
-const comparison = createComparison({
-  status: () => ({ kind: state.kind, frame: state.liveFrames, measurement: state.measurement }),
-  sample: readSample,
-  widget: (id) => state.widgets.find((widget) => widget.id === id),
+const comparison = createWorkspaceComparison({
+  api,
+  snapshot: comparisonSnapshot,
   inspect(id) {
+    if (id !== "source" && !state.widgets.some((widget) => widget.id === id)) return;
     selectWidget(id);
     setInspector(true, "hist");
     if (window.innerWidth < 1180) {
@@ -335,13 +297,30 @@ const comparison = createComparison({
     }
   },
   onSampleNeeded: scheduleStill,
+  onError: fail,
 });
 
-function syncComparison() {
-  comparison.sync([
-    { id: "source", title: "Original source", icon: "image" },
-    ...state.widgets.map((widget) => ({ id: widget.id, title: widget.method.name, icon: widget.method.icon })),
-  ]);
+function comparisonSnapshot() {
+  const status = { kind: state.kind, frame: state.liveFrames, measurement: state.measurement, generation: state.generation };
+  const source = readSample("source");
+  const items = [{
+    id: "source", title: "Original source", icon: "image", description: "Reference distribution",
+    sample: source ? { stats: source.stats, error: source.error } : null,
+  }];
+  for (const widget of state.widgets) {
+    const entry = readSample(widget.id, widget);
+    const values = entry?.params || widget.params;
+    const description = widget.method.params
+      .filter((spec) => spec.type !== "text" && (!spec.when || spec.when.values.includes(values[spec.when.key])))
+      .slice(0, 2)
+      .map((spec) => spec.type === "select" ? values[spec.key] : spec.label + " " + values[spec.key]);
+    items.push({
+      id: widget.id, title: widget.method.name, icon: widget.method.icon,
+      description: description.join(" · ") || "Fixed calculation",
+      sample: entry ? { stats: entry.stats, ms: entry.ms, error: entry.error } : null,
+    });
+  }
+  return { status, items };
 }
 
 function setPreview(tile, item, bytes) {
@@ -418,7 +397,7 @@ function addWidgets(ids) {
   if (!last) return;
   state.marked.clear();
   drawBatch();
-  syncComparison();
+  comparison.refresh();
   syncStage();
   selectWidget(last.id);
   addEvent(last.method.name + (ids.length > 1 ? " and selected methods added." : " added."));
@@ -433,7 +412,7 @@ function removeWidget(id) {
   clearPreview(widget.tile);
   workspaceBoard.remove(id);
   state.samples.delete(id);
-  syncComparison();
+  comparison.refresh();
   if (state.selected === id) selectWidget(state.widgets[Math.min(index, state.widgets.length - 1)]?.id || "source");
   addEvent(widget.method.name + " removed.");
   syncStage();
@@ -468,10 +447,6 @@ function syncStage() {
   syncSelection();
 }
 
-function dimensionsText(object) {
-  return object?.width && object?.height ? object.width + " × " + object.height : "—";
-}
-
 function blankResults() {
   for (const widget of state.widgets) {
     widget.rendered = -1;
@@ -487,7 +462,6 @@ function resetPipeline() {
   state.measurement = null;
   state.lastFrame = state.frameCost = state.liveFrames = state.skipped = 0;
   state.latencies.length = state.completions.length = 0;
-  comparison.reset();
   blankResults();
 }
 
@@ -949,55 +923,6 @@ function resetParameters() {
   scheduleStill();
 }
 
-function chartBase(height, labels, description) {
-  const svg = svgNode("svg", { viewBox: "0 0 248 " + height, role: "img", "aria-label": description });
-  const bottom = height - 20;
-  const left = 10, right = 238, top = 8;
-  const guides = svgNode("g", { stroke: "#30303b", "stroke-width": ".65" });
-  for (let i = 0; i < 5; i++) {
-    const x = left + (right - left) * i / 4;
-    guides.append(svgNode("path", { d: "M" + x + " " + top + "V" + bottom }));
-  }
-  for (let i = 0; i < 4; i++) {
-    const y = top + (bottom - top) * i / 3;
-    guides.append(svgNode("path", { d: "M" + left + " " + y + "H" + right }));
-  }
-  svg.append(guides);
-  for (const [index, value] of labels.entries()) {
-    const x = left + (right - left) * index / (labels.length - 1);
-    const text = svgNode("text", { x, y: height - 6, fill: "#a5a5b2", "font-size": 8.5,
-      "font-family": "Consolas,monospace", "text-anchor": index === 0 ? "start" : index === labels.length - 1 ? "end" : "middle" });
-    text.textContent = value;
-    svg.append(text);
-  }
-  return { svg, top, left, right, bottom };
-}
-
-function plotLine(graph, values, maximum, color, area = false) {
-  const { svg, top, left, right, bottom } = graph;
-  if (!values.length) return;
-  const points = values.map((value, index) => {
-    const x = left + (right - left) * (values.length === 1 ? 1 : index / (values.length - 1));
-    const y = bottom - (bottom - top) * Math.min(1, value / maximum);
-    return [x.toFixed(2), y.toFixed(2)];
-  });
-  const line = "M" + points.map((point) => point.join(" ")).join("L");
-  if (area) svg.append(svgNode("path", { d: line + "L" + points.at(-1)[0] + " " + bottom +
-    "L" + points[0][0] + " " + bottom + "Z", fill: color, "fill-opacity": ".19" }));
-  if (points.length === 1) {
-    svg.append(svgNode("circle", { cx: points[0][0], cy: points[0][1], r: 2.2, fill: color }));
-  } else {
-    svg.append(svgNode("path", { d: line, fill: "none", stroke: color, "stroke-width": "1.3", "stroke-linejoin": "round" }));
-  }
-}
-
-function emptyChart(graph, message) {
-  const text = svgNode("text", { x: 124, y: (graph.top + graph.bottom) / 2 + 3, "text-anchor": "middle",
-    fill: "#a5a5b6", "font-size": 9, "font-family": "Consolas,monospace" });
-  text.textContent = message;
-  graph.svg.append(text);
-}
-
 function rows(target, entries) {
   const fragments = document.createDocumentFragment();
   for (const [key, value] of entries) {
@@ -1197,7 +1122,6 @@ api.onAction((action) => {
 });
 api.onWindowState((maximized) => replaceIcon($("maximize"), maximized ? "restore" : "maximize", maximized ? "Restore" : "Maximize"));
 setInspector(state.inspector);
-syncComparison();
 syncStage();
 connecting = warmEngine().finally(() => { connecting = null; });
 api.catalog().then((catalog) => {

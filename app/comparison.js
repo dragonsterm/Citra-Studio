@@ -1,8 +1,42 @@
 "use strict";
 
-function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
-  const drawer = $("comparison");
-  const dock = $("dock-compare");
+function createComparisonView({ inspect, onViewChange, detached = false }) {
+  const panel = $("comparison");
+  panel.classList.add("comparison-panel");
+  panel.innerHTML = `
+  <div id="compare-resize" class="comparison-resize" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="Resize Compare methods"><span></span></div>
+  <header class="comparison-header">
+    <div class="comparison-ident">
+      <span class="comparison-mark"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg></span>
+      <div><h2 id="comparison-title">Compare methods</h2><p id="comparison-subtitle">Live histograms and processing metrics</p></div>
+    </div>
+    <div class="comparison-controls">
+      <div class="channel-switch" role="group" aria-label="Histogram channels">
+        <button id="compare-luma" type="button" aria-pressed="true" title="Luminance">Luma</button>
+        <button id="compare-rgb" type="button" aria-pressed="false" title="Red, green and blue channels">RGB</button>
+      </div>
+      <button id="compare-pause" type="button" class="icon-button" aria-label="Pause live histograms" title="Pause live histograms" aria-pressed="false" disabled><svg class="icon" aria-hidden="true"><use href="#i-pause"></use></svg></button>
+      <button id="compare-popout" type="button" class="icon-button" aria-label="Pop out comparison" title="Pop out comparison"><svg class="icon" aria-hidden="true"><use href="#i-popout"></use></svg></button>
+      <button id="compare-expand" type="button" class="icon-button" aria-label="Expand comparison" title="Expand comparison" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>
+      <button id="compare-close" type="button" class="icon-button" aria-label="Close comparison" title="Close comparison"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+    </div>
+  </header>
+  <div class="comparison-strip">
+    <span id="comparison-status" class="comparison-status"><span class="live-dot"></span><span>Awaiting source</span></span>
+    <button id="comparison-scale" type="button" class="seg-toggle" aria-pressed="true" title="Switch between shared and per-card histogram scales">Shared scale · % of pixels</button>
+    <button id="compare-cursor" class="text-button compact" type="button" hidden>Clear locked bin</button>
+  </div>
+  <div class="comparison-body">
+    <div id="comparison-empty" class="comparison-empty"><svg class="icon" aria-hidden="true"><use href="#i-activity"></use></svg><strong>Waiting for a source</strong><p>Open a photo or start the webcam to compare pixel distributions.</p></div>
+    <section id="pinned-comparison" class="pinned-shelf" aria-label="Pinned histograms" hidden>
+      <div class="shelf-heading"><svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg> Pinned histograms</div>
+      <div id="pinned-comparison-grid" class="card-grid comparison-grid"></div>
+    </section>
+    <div id="comparison-scroll" class="card-scroll">
+      <div id="comparison-grid" class="card-grid comparison-grid"></div>
+    </div>
+  </div>
+  `;
   const pause = $("compare-pause");
   const scale = $("comparison-scale");
   const cards = new Map();
@@ -10,22 +44,26 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
   const board = createCardBoard({
     grid: $("comparison-grid"), scroll: $("comparison-scroll"),
     shelf: $("pinned-comparison"), pinnedGrid: $("pinned-comparison-grid"), swap: true,
+    onChange: notifyViewChange,
   });
-  let opened = false;
-  let expanded = false;
+  let latest = { status: { kind: "idle" }, items: [] };
   let rgb = false;
   let shared = true;
   let held = null;
   let cursor = null;
   let locked = false;
-  let closeTimer = 0;
+
+  $("compare-resize").hidden = detached;
+  $("compare-expand").hidden = detached;
+  $("compare-close").hidden = detached;
+  if (detached) replaceIcon($("compare-popout"), "dock", "Dock comparison in workspace");
 
   function channels(stats) {
     return rgb && stats?.bins.R ? ["R", "G", "B"] : ["Y"];
   }
 
   function snapshot(id) {
-    return held ? held.samples.get(id) : sample(id);
+    return (held || latest).items.find((item) => item.id === id);
   }
 
   function cardFor({ id, title, icon: iconName }) {
@@ -86,16 +124,17 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
       return Math.max(0, Math.min(63, Math.round(fraction * 63)));
     }
     chart.addEventListener("pointermove", (event) => {
-      if (locked || !snapshot(id)?.stats) return;
+      if (locked || !snapshot(id)?.sample?.stats) return;
       const next = binAt(event);
       if (next !== cursor) setCursor(next);
     });
     chart.addEventListener("pointerleave", () => { if (!locked) setCursor(null); });
     chart.addEventListener("click", (event) => {
-      if (!snapshot(id)?.stats) return;
+      if (!snapshot(id)?.sample?.stats) return;
       const next = binAt(event);
       locked = !(locked && cursor === next);
       setCursor(next);
+      notifyViewChange();
     });
     chart.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && cursor !== null) {
@@ -103,7 +142,7 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
         clearCursor();
         return;
       }
-      if (!snapshot(id)?.stats || !["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key)) return;
+      if (!snapshot(id)?.sample?.stats || !["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key)) return;
       event.preventDefault();
       let next = cursor ?? 32;
       if (event.key === "Home") next = 0;
@@ -112,6 +151,7 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
       if (event.key === "ArrowRight") next = Math.min(63, next + 1);
       if (event.key === "Enter" || event.key === " ") locked = !locked;
       setCursor(next);
+      if (locked || event.key === "Enter" || event.key === " ") notifyViewChange();
     });
 
     return { node, mark, subtitle, chart, graph, series, guide, empty, readout, values, dimensions, time };
@@ -120,12 +160,14 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
   function setCursor(bin) {
     cursor = bin;
     $("compare-cursor").hidden = !locked;
-    for (const [id, card] of cards) drawCursor(card, snapshot(id));
+    for (const [id, card] of cards) drawCursor(card, snapshot(id)?.sample);
   }
 
   function clearCursor() {
+    const wasLocked = locked;
     locked = false;
     setCursor(null);
+    if (wasLocked) notifyViewChange();
   }
 
   function drawCursor(card, entry) {
@@ -145,20 +187,8 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
     card.readout.textContent = start + "–" + (start + 3) + " · " + fractions.join("  ");
   }
 
-  function summarize(id, entry) {
-    if (id === "source") return "Reference distribution";
-    const sourceWidget = widget(id);
-    if (!sourceWidget) return "";
-    const values = entry?.params || sourceWidget.params;
-    const active = sourceWidget.method.params.filter((spec) => !spec.when || spec.when.values.includes(values[spec.when.key]));
-    const description = active.filter((spec) => spec.type !== "text").map((spec) => spec.type === "select"
-      ? values[spec.key] : spec.label + " " + values[spec.key]);
-    return description.slice(0, 2).join(" · ") || "Fixed calculation";
-  }
-
   function refresh() {
-    if (!opened) return;
-    const current = held?.status || status();
+    const current = (held || latest).status;
     const active = current.kind !== "idle";
     const live = current.kind === "live";
     const measurement = current.measurement;
@@ -173,9 +203,13 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
       (cards.size - 1) + (cards.size === 2 ? " method" : " methods") + " + source" +
       (measurement ? " · " + dimensionsText(measurement) + " · " + measurement.engine.toFixed(1) + " ms/frame" : "");
     pause.disabled = !live;
+    $("compare-luma").setAttribute("aria-pressed", String(!rgb));
+    $("compare-rgb").setAttribute("aria-pressed", String(rgb));
+    scale.setAttribute("aria-pressed", String(shared));
+    $("compare-cursor").hidden = !locked;
     pause.setAttribute("aria-pressed", String(!!held));
     replaceIcon(pause, held ? "play" : "pause", held ? "Resume live histograms" : "Pause live histograms");
-    if (!active) {
+    if (!active || panel.classList.contains("compact")) {
       scale.textContent = shared ? "Shared scale · % of pixels" : "Fit each · % of pixels";
       return;
     }
@@ -183,16 +217,17 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
     const histograms = new Map();
     let peak = 1;
     for (const [id] of cards) {
-      const entry = snapshot(id);
+      const item = snapshot(id);
+      const entry = item?.sample;
       const stats = entry?.stats;
       const curves = stats ? channels(stats).map((key) => [key, stats.bins[key].map((count) => 100 * count / stats.pixels)]) : [];
       const localPeak = Math.ceil(Math.max(1, ...curves.flatMap(([, bins]) => bins)));
       peak = Math.max(peak, localPeak);
-      histograms.set(id, { entry, curves, localPeak });
+      histograms.set(id, { entry, description: item?.description, curves, localPeak });
     }
     scale.textContent = shared ? "Shared scale · 0–" + peak + "% of pixels" : "Fit each · % of pixels";
     for (const [id, card] of cards) {
-      const { entry, curves, localPeak } = histograms.get(id);
+      const { entry, description, curves, localPeak } = histograms.get(id);
       const stats = entry?.stats;
       card.series.replaceChildren();
       for (const [key, bins] of curves) {
@@ -200,9 +235,8 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
       }
       card.empty.textContent = stats ? "" : entry?.error ? "Needs input" : "Awaiting pixels";
       if (id === "source") replaceIcon(card.mark, live ? "video" : "image");
-      const description = summarize(id, entry);
-      card.subtitle.textContent = description;
-      card.subtitle.title = description;
+      card.subtitle.textContent = description || "";
+      card.subtitle.title = description || "";
       for (const [key, value] of card.values) value.textContent = stats ? String(stats[key]) : "—";
       card.dimensions.textContent = stats ? dimensionsText(stats) + (stats.bins.R ? " · RGB" : " · Gray") : "—";
       card.time.textContent = id === "source" ? "Source" : Number.isFinite(entry?.ms) ? entry.ms.toFixed(2) + " ms" : "—";
@@ -210,84 +244,269 @@ function createComparison({ status, sample, widget, inspect, onSampleNeeded }) {
     }
   }
 
+  function settings() {
+    return { rgb, shared, bin: locked ? cursor : null, held, arrangement: board.arrangement() };
+  }
+
+  function notifyViewChange() {
+    onViewChange?.(settings());
+  }
+
+  function update(data) {
+    const generationChanged = latest.status.generation !== data.status.generation;
+    latest = data;
+    const wasPaused = !!held;
+    if (generationChanged) {
+      held = null;
+      locked = false;
+      cursor = null;
+    }
+    const ids = new Set(data.items.map((item) => item.id));
+    for (const id of cards.keys()) {
+      if (!ids.has(id)) {
+        board.remove(id);
+        cards.delete(id);
+      }
+    }
+    for (const item of data.items) {
+      if (cards.has(item.id)) continue;
+      const card = cardFor(item);
+      cards.set(item.id, card);
+      board.add(item.id, card.node);
+    }
+    refresh();
+    if (generationChanged && wasPaused) notifyViewChange();
+  }
+
+  function restore(view) {
+    if (!view) return;
+    rgb = !!view.rgb;
+    shared = view.shared !== false;
+    held = view.held && view.held.status.generation === latest.status.generation ? view.held : null;
+    locked = Number.isInteger(view.bin) && view.bin >= 0 && view.bin <= 63;
+    cursor = locked ? view.bin : null;
+    board.restoreArrangement(view.arrangement);
+    refresh();
+  }
+
+  $("compare-cursor").addEventListener("click", clearCursor);
+  scale.addEventListener("click", () => {
+    shared = !shared;
+    refresh();
+    notifyViewChange();
+  });
+  for (const [id, mode] of [["compare-luma", false], ["compare-rgb", true]]) {
+    $(id).addEventListener("click", () => {
+      rgb = mode;
+      refresh();
+      notifyViewChange();
+    });
+  }
+  pause.addEventListener("click", () => {
+    if (latest.status.kind !== "live") return;
+    held = held ? null : latest;
+    refresh();
+    notifyViewChange();
+  });
+
+  return {
+    get paused() { return !!held; },
+    update,
+    refresh,
+    settings,
+    restore,
+    cancelDrag: board.cancelDrag,
+    clearFrame() {
+      held = null;
+      locked = false;
+      cursor = null;
+    },
+  };
+}
+
+function createWorkspaceComparison({ api, snapshot, inspect, onSampleNeeded, onError }) {
+  const drawer = $("comparison");
+  const dock = $("dock-compare");
+  const view = createComparisonView({ inspect, onViewChange: () => { if (!view.paused) onSampleNeeded(); } });
+  const grip = $("compare-resize");
+  const header = drawer.querySelector(".comparison-header");
+  const workspace = drawer.parentElement;
+  const expand = $("compare-expand");
+  const minHeight = 74;
+  let opened = false;
+  let detached = false;
+  let detachedSampling = false;
+  let preferredHeight;
+  let expanded = false;
+  let drag = null;
+  let compact = false;
+
+  function maxHeight() {
+    const chrome = workspace.querySelector(".channel-header").offsetHeight + dock.closest(".dock").offsetHeight;
+    return Math.max(minHeight, workspace.clientHeight - chrome - 154);
+  }
+
+  function syncHeight() {
+    const max = maxHeight();
+    const ideal = preferredHeight ?? Math.min(372, Math.round(workspace.clientHeight * 0.4));
+    const height = expanded ? max : Math.max(minHeight, Math.min(max, ideal));
+    const wasCompact = compact;
+    compact = height === minHeight;
+    drawer.style.setProperty("--comparison-height", height + "px");
+    drawer.classList.toggle("compact", compact);
+    grip.setAttribute("aria-valuemin", String(minHeight));
+    grip.setAttribute("aria-valuemax", String(max));
+    grip.setAttribute("aria-valuenow", String(height));
+    expand.setAttribute("aria-pressed", String(expanded));
+    replaceIcon(expand, expanded ? "collapse" : "expand", expanded ? "Restore comparison height" : "Expand comparison");
+    if (opened && !detached && wasCompact && !compact) {
+      refresh();
+      onSampleNeeded();
+    }
+  }
+
+  function resizeTo(height) {
+    preferredHeight = Math.max(minHeight, Math.min(maxHeight(), height));
+    expanded = false;
+    syncHeight();
+  }
+
+  function startResize(event) {
+    if (!event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
+    drag = { id: event.pointerId, y: event.clientY, height: drawer.getBoundingClientRect().height };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  for (const handle of [grip, header]) {
+    handle.addEventListener("pointerdown", startResize);
+    handle.addEventListener("pointermove", (event) => {
+      if (event.pointerId === drag?.id) resizeTo(Math.round(drag.height + drag.y - event.clientY));
+    });
+    for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      handle.addEventListener(name, () => { drag = null; });
+    }
+  }
+  grip.addEventListener("keydown", (event) => {
+    const height = drawer.offsetHeight;
+    const heights = { ArrowUp: height + 32, ArrowDown: height - 32, Home: minHeight, End: maxHeight() };
+    if (!Object.hasOwn(heights, event.key)) return;
+    event.preventDefault();
+    resizeTo(heights[event.key]);
+  });
+  window.addEventListener("resize", syncHeight);
+  expand.addEventListener("click", () => {
+    expanded = !expanded;
+    syncHeight();
+  });
+
+  function syncDock() {
+    const inline = opened && !detached;
+    const label = detached ? "Focus comparison window" : "Compare live telemetry";
+    drawer.hidden = !inline;
+    drawer.inert = !inline;
+    dock.setAttribute("aria-expanded", String(inline));
+    dock.classList.toggle("detached", detached);
+    replaceIcon(dock, detached ? "popout" : "activity", label);
+  }
+
+  function refresh() {
+    if (!opened) return;
+    const current = snapshot();
+    if (detached) api.sendComparisonData(current);
+    else view.update(current);
+  }
+
   function open() {
-    clearTimeout(closeTimer);
     opened = true;
-    drawer.hidden = false;
-    drawer.inert = false;
-    drawer.classList.add("open");
-    dock.setAttribute("aria-expanded", "true");
+    syncDock();
+    syncHeight();
     refresh();
     onSampleNeeded();
     $("compare-luma").focus({ preventScroll: true });
   }
 
   function close(restoreFocus = true) {
-    if (!opened) return;
+    if (!opened || detached) return;
     opened = false;
-    held = null;
-    clearCursor();
-    board.cancelDrag();
-    drawer.classList.remove("open");
-    drawer.inert = true;
-    dock.setAttribute("aria-expanded", "false");
-    closeTimer = setTimeout(() => { drawer.hidden = true; }, 185);
+    view.clearFrame();
+    view.cancelDrag();
+    syncDock();
     if (restoreFocus) dock.focus({ preventScroll: true });
   }
 
-  dock.addEventListener("click", () => { if (opened) close(); else open(); });
-  $("compare-close").addEventListener("click", () => close());
-  $("compare-cursor").addEventListener("click", clearCursor);
-  $("compare-expand").addEventListener("click", (event) => {
-    expanded = !expanded;
-    drawer.classList.toggle("expanded", expanded);
-    event.currentTarget.setAttribute("aria-pressed", String(expanded));
-    replaceIcon(event.currentTarget, expanded ? "collapse" : "expand", expanded ? "Reduce comparison" : "Expand comparison");
-  });
-  scale.addEventListener("click", () => {
-    shared = !shared;
-    scale.setAttribute("aria-pressed", String(shared));
-    refresh();
-  });
-  for (const [id, mode] of [["compare-luma", false], ["compare-rgb", true]]) {
-    $(id).addEventListener("click", () => {
-      rgb = mode;
-      $("compare-luma").setAttribute("aria-pressed", String(!rgb));
-      $("compare-rgb").setAttribute("aria-pressed", String(rgb));
+  async function popOut() {
+    if (!opened || detached) return;
+    view.cancelDrag();
+    detached = true;
+    detachedSampling = !view.paused;
+    syncDock();
+    try {
+      await api.popOutComparison(snapshot(), view.settings());
       refresh();
-    });
+      onSampleNeeded();
+    } catch (error) {
+      detached = false;
+      open();
+      onError(error.message);
+    }
   }
-  pause.addEventListener("click", () => {
-    if (status().kind !== "live") return;
-    held = held ? null : { status: status(), samples: new Map([...cards.keys()].map((id) => [id, sample(id)])) };
-    refresh();
-    if (!held) onSampleNeeded();
+
+  dock.addEventListener("click", () => {
+    if (detached) void api.focusComparison().catch((error) => onError(error.message));
+    else if (opened) close();
+    else open();
   });
+  $("compare-close").addEventListener("click", () => close());
+  $("compare-popout").addEventListener("click", popOut);
+
+  api.onComparisonSampling((sampling) => {
+    if (detachedSampling === sampling) return;
+    detachedSampling = sampling;
+    if (sampling) onSampleNeeded();
+  });
+  api.onComparisonReturn(({ docked, settings, error }) => {
+    detached = false;
+    opened = false;
+    view.update(snapshot());
+    view.restore(settings);
+    if (docked || error) open();
+    else {
+      view.clearFrame();
+      syncDock();
+    }
+    if (error) onError(error);
+  });
+  api.onComparisonInspect(inspect);
 
   return {
-    get open() { return opened; },
-    get sampling() { return opened && !held; },
+    get open() { return opened && !detached; },
+    get sampling() { return opened && (detached ? detachedSampling : !compact && !view.paused); },
     close,
     refresh,
-    reset() {
-      held = null;
-      clearCursor();
-      board.cancelDrag();
-    },
-    sync(items) {
-      const ids = new Set(items.map((item) => item.id));
-      for (const id of cards.keys()) {
-        if (ids.has(id)) continue;
-        board.remove(id);
-        cards.delete(id);
-      }
-      for (const item of items) {
-        if (cards.has(item.id)) continue;
-        const card = cardFor(item);
-        cards.set(item.id, card);
-        board.add(item.id, card.node);
-      }
-      refresh();
-    },
   };
 }
+
+function startDetachedComparison(api) {
+  const view = createComparisonView({
+    detached: true,
+    inspect: (id) => api.inspect(id).catch(() => {}),
+    onViewChange: api.changeSettings,
+  });
+  let receivedUpdate = false;
+  api.onData((data) => {
+    receivedUpdate = true;
+    view.update(data);
+  });
+  $("compare-popout").addEventListener("click", () => {
+    view.cancelDrag();
+    void api.dock(view.settings()).catch(() => {});
+  });
+  api.initial().then(({ data, settings }) => {
+    if (!receivedUpdate) view.update(data);
+    view.restore(settings);
+    api.changeSettings(view.settings());
+  }).catch(() => window.close());
+}
+
+if (window.compareWindow) startDetachedComparison(window.compareWindow);

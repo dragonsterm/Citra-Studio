@@ -1,6 +1,6 @@
 "use strict";
 
-function createCardBoard({ grid, scroll, shelf, pinnedGrid, swap = false, onMoveStart }) {
+function createCardBoard({ grid, scroll, shelf, pinnedGrid, swap = false, onMoveStart, onChange }) {
   const cards = new Map();
   const pinned = new Set();
   const animations = new WeakMap();
@@ -185,6 +185,7 @@ function createCardBoard({ grid, scroll, shelf, pinnedGrid, swap = false, onMove
     if (commit && current.inside) {
       const landed = current.card.getBoundingClientRect();
       animateFrom(current.card, lifted.left - landed.left, lifted.top - landed.top);
+      if (current.to !== current.from) onChange?.();
     }
     const surface = current.surface.grid;
     if (surface.hasPointerCapture(current.pointer)) surface.releasePointerCapture(current.pointer);
@@ -266,9 +267,24 @@ function createCardBoard({ grid, scroll, shelf, pinnedGrid, swap = false, onMove
       const cols = Number(getComputedStyle(surface.grid).getPropertyValue("--columns").trim()) || 1;
       const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[event.key];
       const to = Math.max(0, Math.min(items.length - 1, from + step));
-      if (from !== to) moveGroup(surface, movedOrder(items, from, to), card.dataset.sortKey);
+      if (from !== to) {
+        moveGroup(surface, movedOrder(items, from, to), card.dataset.sortKey);
+        onChange?.();
+      }
       handle.focus({ preventScroll: true });
     });
+  }
+
+  function decoratePin(key) {
+    const card = cards.get(key);
+    const enabled = pinned.has(key);
+    card.classList.toggle("pinned-card", enabled);
+    const button = card.querySelector("[data-card-pin]");
+    const label = (enabled ? "Unpin " : "Pin ") + button.dataset.cardPin;
+    button.setAttribute("aria-pressed", String(enabled));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    return button;
   }
 
   return {
@@ -289,19 +305,26 @@ function createCardBoard({ grid, scroll, shelf, pinnedGrid, swap = false, onMove
     },
     togglePin(key) {
       finish(false);
-      const card = cards.get(key);
-      if (!card) return;
-      const enable = !pinned.has(key);
-      if (enable) pinned.add(key);
-      else pinned.delete(key);
-      card.classList.toggle("pinned-card", enable);
-      const button = card.querySelector("[data-card-pin]");
-      const label = (enable ? "Unpin " : "Pin ") + button.dataset.cardPin;
-      button.setAttribute("aria-pressed", String(enable));
-      button.setAttribute("aria-label", label);
-      button.title = label;
+      if (!cards.has(key)) return;
+      if (!pinned.delete(key)) pinned.add(key);
+      const button = decoratePin(key);
       draw();
       button.focus({ preventScroll: true });
+      onChange?.();
+    },
+    arrangement() {
+      return { order: [...order], pinned: [...pinned] };
+    },
+    restoreArrangement(layout) {
+      if (!layout) return;
+      finish(false);
+      order = [...new Set([...layout.order, ...order])].filter((key) => cards.has(key));
+      pinned.clear();
+      for (const key of layout.pinned) {
+        if (cards.has(key)) pinned.add(key);
+      }
+      for (const key of order) decoratePin(key);
+      draw();
     },
     feature(key) {
       if (featured === key) return;

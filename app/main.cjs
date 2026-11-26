@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, session, Tray } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, session, Tray } = require("electron");
 const { rename, unlink, writeFile } = require("node:fs/promises");
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
@@ -8,6 +8,8 @@ const catalog = require("../engine/methods.json");
 
 const index = path.join(__dirname, "index.html");
 const indexURL = pathToFileURL(index).href;
+const comparisonPage = path.join(__dirname, "comparison.html");
+const comparisonURL = pathToFileURL(comparisonPage).href;
 const iconPath = path.join(__dirname, "icon.ico");
 const photoExtensions = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
 const availableMethods = new Set(catalog.flatMap((group) => group.methods.map((method) => method.id)));
@@ -22,6 +24,12 @@ const exportFormats = {
 
 let window;
 let windowReady = false;
+let comparisonWindow;
+let comparisonReady = false;
+let comparisonData;
+let comparisonSettings;
+let comparisonReturn;
+let showComparisonOnRestore = false;
 let tray;
 let engine;
 let quitting = false;
@@ -38,11 +46,18 @@ function reveal() {
   window.setSkipTaskbar(false);
   if (window.isMinimized()) window.restore();
   if (!window.isVisible()) window.show();
+  if (showComparisonOnRestore) {
+    showComparisonOnRestore = false;
+    if (comparisonReady) comparisonWindow.showInactive();
+  }
   window.focus();
 }
 
 function hideToTray() {
   if (!window) return;
+  showComparisonOnRestore ||= !!comparisonWindow && (!comparisonReady ||
+    (comparisonWindow.isVisible() && !comparisonWindow.isMinimized()));
+  comparisonWindow?.hide();
   window.webContents.send("studio:action", "suspend");
   window.setSkipTaskbar(true);
   window.hide();
@@ -146,6 +161,7 @@ function createWindow() {
   window.on("closed", () => {
     windowReady = false;
     window = null;
+    comparisonWindow?.destroy();
   });
   window.loadFile(index).catch((error) => {
     if (quitting) return;
@@ -155,10 +171,15 @@ function createWindow() {
   });
 }
 
-function handle(channel, action) {
+function fromWindow(event, target, url) {
+  return target && event.sender === target.webContents && event.senderFrame?.url === url &&
+    !event.senderFrame.parent;
+}
+
+function handle(channel, action, fromComparison = false) {
   ipcMain.handle("studio:" + channel, async (event, ...args) => {
-    if (event.sender !== window?.webContents || event.senderFrame?.url !== indexURL ||
-        event.senderFrame?.parent) {
+    const target = fromComparison ? comparisonWindow : window;
+    if (!fromWindow(event, target, fromComparison ? comparisonURL : indexURL)) {
       return { error: "Invalid window." };
     }
     try {
@@ -167,6 +188,108 @@ function handle(channel, action) {
     } catch (error) {
       return { error: String(error.message || error).slice(0, 400) };
     }
+  });
+}
+
+function comparisonVisible() {
+  return comparisonReady && comparisonWindow?.isVisible() && !comparisonWindow.isMinimized();
+}
+
+function updateComparisonSampling() {
+  window?.webContents.send("studio:compare-sampling", !!comparisonVisible() && !comparisonSettings?.held);
+}
+
+function focusComparison() {
+  if (!comparisonReady) return;
+  if (comparisonWindow.isMinimized()) comparisonWindow.restore();
+  comparisonWindow.show();
+  comparisonWindow.focus();
+}
+
+function openComparison(data, settings) {
+  if (comparisonWindow) {
+    focusComparison();
+    return;
+  }
+  const area = screen.getDisplayMatching(window.getBounds()).workArea;
+  const width = Math.min(810, Math.max(480, Math.round(area.width * 0.48)));
+  const height = Math.min(570, Math.round(area.height * 0.78));
+  const popup = new BrowserWindow({
+    title: "Compare methods · Citra Studio",
+    x: area.x + Math.max(0, area.width - width - 18),
+    y: area.y + Math.max(0, area.height - height - 18),
+    width, height, minWidth: 450, minHeight: 365,
+    show: false,
+    icon: iconPath,
+    backgroundColor: "#202027",
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#16161c", symbolColor: "#dadbe6", height: 34 },
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  comparisonWindow = popup;
+  comparisonData = data;
+  comparisonSettings = settings;
+  popup.removeMenu();
+  popup.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  popup.webContents.on("will-navigate", (event) => event.preventDefault());
+  popup.once("ready-to-show", () => {
+    comparisonReady = true;
+    if (!showComparisonOnRestore) popup.show();
+  });
+  for (const name of ["show", "hide", "minimize", "restore"]) {
+    popup.on(name, () => {
+      updateComparisonSampling();
+      if (comparisonVisible()) popup.webContents.send("studio:compare-data", comparisonData);
+    });
+  }
+  popup.on("closed", () => {
+    comparisonWindow = null;
+    comparisonReady = false;
+    showComparisonOnRestore = false;
+    if (!quitting) {
+      window?.webContents.send("studio:compare-return", { settings: comparisonSettings, ...comparisonReturn });
+    }
+    comparisonReturn = comparisonData = comparisonSettings = null;
+  });
+  function openFailed() {
+    if (popup.isDestroyed() || quitting) return;
+    comparisonReturn = { docked: true, error: "The comparison window could not be opened." };
+    popup.destroy();
+  }
+  popup.webContents.on("render-process-gone", openFailed);
+  popup.loadFile(comparisonPage).catch(openFailed);
+}
+
+function wireComparison() {
+  handle("compare-popout", openComparison);
+  handle("compare-focus", focusComparison);
+  handle("compare-initial", () => ({ data: comparisonData, settings: comparisonSettings }), true);
+  handle("compare-dock", (settings) => {
+    comparisonSettings = settings;
+    comparisonReturn = { docked: true };
+    comparisonWindow.close();
+    reveal();
+  }, true);
+  handle("compare-inspect", (id) => {
+    if (comparisonData.items.some((item) => item.id === id)) {
+      reveal();
+      window.webContents.send("studio:compare-inspect", id);
+    }
+  }, true);
+  ipcMain.on("studio:compare-data", (event, data) => {
+    if (!comparisonWindow || !fromWindow(event, window, indexURL)) return;
+    comparisonData = data;
+    if (comparisonVisible()) comparisonWindow.webContents.send("studio:compare-data", data);
+  });
+  ipcMain.on("studio:compare-settings", (event, settings) => {
+    if (!fromWindow(event, comparisonWindow, comparisonURL)) return;
+    comparisonSettings = settings;
+    updateComparisonSampling();
   });
 }
 
@@ -281,6 +404,7 @@ if (!app.requestSingleInstanceLock()) {
     engine = new EngineBridge({ packaged: app.isPackaged, appPath: app.getAppPath(), resourcesPath: process.resourcesPath });
     configureSession();
     wire();
+    wireComparison();
     createWindow();
     setupWindowsActions();
   });
