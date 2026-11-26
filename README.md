@@ -45,7 +45,7 @@ On Windows x64, make sure Node.js and `uv` are on your PATH. From the project di
 npm.cmd run build
 ```
 
-The first build requires an internet connection. The build sets up Python 3.13.12 with `uv`, verifies the model checksums, and creates `dist/Citra-Studio-Windows-x64.exe`. After building, use `npm.cmd start` to run the development version and `npm.cmd run check` to check JavaScript syntax.
+The first build requires an internet connection. The build sets up Python 3.13.12 with `uv`, verifies the model checksums, and creates `dist/Citra-Studio-Windows-x64.exe`. If an earlier build is running, the new EXE includes its version in the filename. After building, use `npm.cmd start` to run the development version and `npm.cmd run check` to check JavaScript syntax.
 
 - `app/` contains the interface and Windows integration.
 - `engine/` contains the method catalog, algorithms, and Python engine.

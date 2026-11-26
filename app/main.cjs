@@ -12,6 +12,8 @@ const iconPath = path.join(__dirname, "icon.ico");
 const photoExtensions = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"];
 const availableMethods = new Set(catalog.flatMap((group) => group.methods.map((method) => method.id)));
 const actionFlags = { "--pick-photo": "pick", "--start-webcam": "webcam", "--telemetry": "telemetry" };
+const startupDirectory = process.env.CITRA_STARTUP_DIRECTORY;
+delete process.env.CITRA_STARTUP_DIRECTORY;
 const exportFormats = {
   ".png": { name: "PNG image", extensions: ["png"] },
   ".jpg": { name: "JPEG image", extensions: ["jpg", "jpeg"] },
@@ -19,14 +21,20 @@ const exportFormats = {
 };
 
 let window;
+let windowReady = false;
 let tray;
 let engine;
 let quitting = false;
 let jumpList = "Unavailable";
 const actions = [];
 
+async function dismissStartupSplash() {
+  if (!app.isPackaged || !startupDirectory || !path.isAbsolute(startupDirectory)) return;
+  await writeFile(path.join(startupDirectory, "citra-ready"), "", { flag: "wx" }).catch(() => {});
+}
+
 function reveal() {
-  if (!window) return;
+  if (!windowReady || !window) return;
   window.setSkipTaskbar(false);
   if (window.isMinimized()) window.restore();
   if (!window.isVisible()) window.show();
@@ -121,7 +129,11 @@ function createWindow() {
   window.webContents.on("did-finish-load", () => {
     for (const action of actions.splice(0)) window.webContents.send("studio:action", action);
   });
-  window.on("ready-to-show", () => window.show());
+  window.once("ready-to-show", () => {
+    windowReady = true;
+    window.show();
+    void dismissStartupSplash();
+  });
   window.on("minimize", () => window.webContents.send("studio:action", "suspend"));
   window.on("close", (event) => {
     if (quitting) return;
@@ -131,8 +143,16 @@ function createWindow() {
   for (const event of ["maximize", "unmaximize"]) {
     window.on(event, () => window.webContents.send("studio:window-state", window.isMaximized()));
   }
-  window.on("closed", () => { window = null; });
-  window.loadFile(index);
+  window.on("closed", () => {
+    windowReady = false;
+    window = null;
+  });
+  window.loadFile(index).catch((error) => {
+    if (quitting) return;
+    void dismissStartupSplash();
+    dialog.showErrorBox("Citra Studio", "The workspace could not start.\n\n" + error.message);
+    app.quit();
+  });
 }
 
 function handle(channel, action) {
@@ -252,7 +272,7 @@ function wire() {
 }
 
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  void dismissStartupSplash().finally(() => app.quit());
 } else {
   app.setAppUserModelId("id.citra.studio");
   app.on("second-instance", (_, argv) => acceptLaunch(argv));

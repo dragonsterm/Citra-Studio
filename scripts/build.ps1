@@ -88,6 +88,12 @@ Remove-Item Env:npm_config_allow_scripts -ErrorAction SilentlyContinue
 npm.cmd ci --ignore-scripts --no-audit --no-fund
 Assert-Success 'Electron dependencies'
 
+$compiler = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+$startup = Join-Path $build 'citra-startup.exe'
+$startupSource = (Resolve-Path 'scripts/startup.cs').Path
+& $compiler /nologo /target:winexe /optimize+ /r:System.Drawing.dll /r:System.Windows.Forms.dll "/out:$startup" $startupSource
+Assert-Success 'Startup window compilation'
+
 $catalog = (Resolve-Path 'engine/methods.json').Path
 & $python -m PyInstaller --noconfirm --onedir --name citra-engine --distpath .build/engine-dist `
     --workpath .build/pyinstaller --specpath .build --add-data "$($catalog):." --add-data "$($models):models" engine/worker.py
@@ -103,8 +109,40 @@ Copy-Item -LiteralPath (Join-Path $pythonHome 'LICENSE.txt') -Destination (Join-
 $opencv = Join-Path $build 'venv/Lib/site-packages/opencv_python_headless-4.13.0.92.dist-info'
 Copy-Item -LiteralPath (Join-Path $opencv 'LICENSE.txt') -Destination (Join-Path $licenses 'OpenCV.txt')
 Copy-Item -LiteralPath (Join-Path $opencv 'LICENSE-3RD-PARTY.txt') -Destination (Join-Path $licenses 'OpenCV-third-party.txt')
-& '.\node_modules\.bin\electron-builder.cmd' --win portable --x64 --publish never
-Assert-Success 'Portable packaging'
+
+# electron-builder 26.18 hardcodes the portable template. Start the tiny
+# splash before extraction and keep the upstream packaging logic intact.
+$template = (Resolve-Path 'node_modules/app-builder-lib/templates/nsis/portable.nsi').Path
+$originalTemplate = [IO.File]::ReadAllBytes($template)
+$templateText = [Text.Encoding]::UTF8.GetString($originalTemplate)
+$hook = '  !insertmacro check64BitAndSetRegView'
+if ([regex]::Matches($templateText, [regex]::Escape($hook)).Count -ne 1) {
+    throw 'The portable launcher template changed. Update the startup hook.'
+}
+$startSplash = @'
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\citra-startup.exe "${PROJECT_DIR}\.build\citra-startup.exe"
+  System::Call 'Kernel32::GetCurrentProcessId() i.r1'
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("CITRA_STARTUP_DIRECTORY", "$PLUGINSDIR").r0'
+  Exec '"$PLUGINSDIR\citra-startup.exe" $1 "$PLUGINSDIR"'
+'@
+try {
+    $templateText = $templateText.Replace($hook, $hook + [char]10 + $startSplash)
+    [IO.File]::WriteAllText($template, $templateText, [Text.UTF8Encoding]::new($false))
+    & '.\node_modules\.bin\electron-builder.cmd' --win portable --x64 --publish never
+    Assert-Success 'Portable packaging'
+} finally {
+    [IO.File]::WriteAllBytes($template, $originalTemplate)
+}
 New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
-Copy-Item -LiteralPath '.build/package/Citra-Studio-Windows-x64.exe' -Destination 'dist'
-Get-Item -LiteralPath 'dist/Citra-Studio-Windows-x64.exe' | Select-Object FullName,Length
+$packedExe = '.build/package/Citra-Studio-Windows-x64.exe'
+$outputExe = 'dist/Citra-Studio-Windows-x64.exe'
+try {
+    Copy-Item -LiteralPath $packedExe -Destination $outputExe
+} catch [IO.IOException] {
+    if (($_.Exception.HResult -band 0xFFFF) -notin 32, 33) { throw }
+    $version = (Get-Item -LiteralPath $packedExe).VersionInfo.ProductVersion
+    $outputExe = "dist/Citra-Studio-Windows-x64-$version.exe"
+    Copy-Item -LiteralPath $packedExe -Destination $outputExe
+}
+Get-Item -LiteralPath $outputExe | Select-Object FullName,Length
