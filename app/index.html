@@ -37,7 +37,13 @@
       <div class="library-search">
         <label class="searchbox" for="search"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg><input id="search" type="search" placeholder="Find a method" autocomplete="off" aria-label="Find a method"><kbd>/</kbd></label>
       </div>
-      <div class="library-intro"><span class="eyebrow">PROCESSING METHODS</span><span>Click to add or drag onto the canvas.</span></div>
+      <div class="library-intro">
+        <label class="param">
+          <span class="eyebrow">NEW METHODS USE</span>
+          <select id="new-method-input"><option value="source">Original source</option></select>
+        </label>
+        <span>Click a method or drag it onto the canvas.</span>
+      </div>
       <div id="method-list" class="method-list"></div>
       <div id="batch-bar" class="batch-bar" hidden><span id="batch-count"></span><button id="add-batch" class="small-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg> Add</button></div>
       <div class="engine-anchor">
@@ -161,6 +167,10 @@
           <div id="inspect-title" class="inspect-title">Original source</div>
           <p id="inspect-description" class="muted">Open a source to view its pixel distribution.</p>
           <code id="formula" class="formula" hidden></code>
+          <label id="method-input-row" class="param" hidden>
+            <span>Input image</span>
+            <select id="method-input"></select>
+          </label>
         </div>
         <div class="inspector-section">
           <div class="section-title"><span class="eyebrow">PIXEL DISTRIBUTION</span><button id="rgb-toggle" type="button" class="seg-toggle" aria-pressed="false" title="Switch to RGB channels" disabled>Y</button></div>
@@ -219,10 +229,11 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <dialog id="help-dialog" aria-labelledby="help-title">
     <div class="dialog-heading"><div><svg class="icon" aria-hidden="true"><use href="#i-help"></use></svg><h2 id="help-title">Workspace guide</h2></div><button type="button" id="close-help" class="icon-button" aria-label="Close guide" title="Close guide" ><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button></div>
-    <p>Each result widget processes the same source, so you can compare different methods or settings side by side.</p>
+    <p>Apply methods to the original image or chain them by using a result as input.</p>
     <dl class="guide-list">
       <div><dt>Choose a source</dt><dd>Open or drop a photo, start the webcam, or load the sample.</dd></div>
       <div><dt>Add methods</dt><dd>Click a method or drag it into the workspace. Hold Ctrl while clicking to select several methods, then drag them together or choose Add.</dd></div>
+      <div><dt>Chain methods</dt><dd>Choose an image under New methods use in the library, or select a result widget and change Input image in the Histogram panel.</dd></div>
       <div><dt>Arrange results</dt><dd>Grab the body or title of a tile to move it. Pin a tile to keep it in the top section. Drag its bottom corner to resize.</dd></div>
       <div><dt>Inspect and save</dt><dd>Select a tile for its histogram, formula and settings. Save the selected image with the download button.</dd></div>
       <div><dt>Compare live telemetry</dt><dd>Open the bottom dock waveform to compare histograms. Drag cards to reorder them, or click a chart to lock the same intensity bin across all cards.</dd></div>

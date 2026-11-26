@@ -117,6 +117,8 @@ def arithmetic(image, p, reference):
         curves = {"Add": np.add, "Subtract": np.subtract, "Multiply": np.multiply, "Divide": np.divide}
         return cv.LUT(image, byte(curves[variant](values, other)))
     other = ref_image(reference, image.shape)
+    if image.ndim == 2:
+        other = gray(other)
     match variant:
         case "Add":
             return cv.add(image, other)

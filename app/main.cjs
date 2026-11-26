@@ -299,13 +299,19 @@ function rendererReply(reply) {
   return fields;
 }
 
-function checkJob(job) {
-  if (!job || !availableMethods.has(job.method) ||
-      typeof job.id !== "string" || job.id.length > 32 ||
-      typeof job.params !== "object" || !job.params || Array.isArray(job.params)) {
-    throw new Error("Invalid result widget.");
+function checkJobs(jobs) {
+  if (!Array.isArray(jobs) || jobs.length > 12) throw new Error("Use at most 12 result widgets.");
+  const byId = new Map();
+  for (const job of jobs) {
+    if (!job || !availableMethods.has(job.method) || typeof job.id !== "string" ||
+        !job.id || job.id === "source" || job.id.length > 32 || byId.has(job.id) ||
+        (job.input !== undefined && (typeof job.input !== "string" || job.input.length > 32)) ||
+        typeof job.params !== "object" || !job.params || Array.isArray(job.params)) {
+      throw new Error("Invalid result widget.");
+    }
+    byId.set(job.id, job);
   }
-  return job;
+  return byId;
 }
 
 function checkPhoto(file) {
@@ -349,18 +355,23 @@ function wire() {
   handle("snapshot", async (dimensions, bytes) => rendererReply(await engine.request("snapshot", checkFrame(dimensions, bytes), bytes)));
 
   handle("render", async (request, bytes) => {
-    if (!Array.isArray(request.jobs) || request.jobs.length > 12) throw new Error("Use at most 12 result widgets.");
-    const jobs = request.jobs.map(checkJob);
+    const byId = checkJobs(request.jobs);
+    const outputIds = request.outputIds ?? [...byId.keys()];
+    if (!Array.isArray(outputIds) || outputIds.length > byId.size || outputIds.some((id) => !byId.has(id))) {
+      throw new Error("Invalid result selection.");
+    }
     const inspect = typeof request.inspect === "string" ? request.inspect.slice(0, 32) : null;
     const inspectMany = Array.isArray(request.inspectMany)
-      ? request.inspectMany.slice(0, 13).filter((id) => id === "source" || jobs.some((job) => job.id === id))
+      ? request.inspectMany.slice(0, 13).filter((id) => id === "source" || byId.has(id))
       : [];
     const dimensions = bytes ? checkFrame(request, bytes) : {};
-    return rendererReply(await engine.request("render", { jobs, inspect, inspectMany, ...dimensions }, bytes));
+    return rendererReply(await engine.request("render",
+      { jobs: request.jobs, outputIds, inspect, inspectMany, ...dimensions }, bytes));
   });
 
-  handle("export", async (job, filename) => {
-    if (job) checkJob(job);
+  handle("export", async ({ jobs, target }, filename) => {
+    const job = checkJobs(jobs).get(target);
+    if (!job && target !== "source") throw new Error("Choose a result to save.");
     const preferred = job?.method === "compression"
       ? ({ JPEG: ".jpg", PNG: ".png", WebP: ".webp" }[job.params.variant] || ".png")
       : ".png";
@@ -376,7 +387,7 @@ function wire() {
     const output = extension ? selected.filePath : selected.filePath + preferred;
     extension = extension === ".jpeg" ? ".jpg" : (extension || preferred);
     if (!formats.includes(extension)) throw new Error("Choose one of the image formats in the save dialog.");
-    const { binary, width, height } = await engine.request("export", { job, extension }, undefined, 90000);
+    const { binary, width, height } = await engine.request("export", { jobs, target, extension }, undefined, 90000);
     const temporary = path.join(path.dirname(output), ".citra-" + randomUUID() + ".tmp");
     try {
       await writeFile(temporary, binary, { flag: "wx" });

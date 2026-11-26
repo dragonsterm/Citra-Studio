@@ -3,6 +3,7 @@ import math
 import os
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
 from time import perf_counter
 
@@ -24,6 +25,8 @@ cv.ocl.setUseOpenCL(False)
 CATALOG = json.loads(Path(__file__).with_name("methods.json").read_text(encoding="utf-8"))
 METHODS = {method["id"]: method for group in CATALOG for method in group["methods"]}
 FUNCTIONS = {key: getattr(basic, key, None) or getattr(advanced, key, None) or getattr(neural, key) for key in METHODS}
+# These methods expect color channels or draw colored overlays.
+COLOR_INPUTS = {"channel", "hsv", "hough", "contours", "corners", "kmeans", "watershed", "classify", "semantic", "lsb"}
 HEADER = struct.Struct("<II")
 FILE_LIMIT = 48 * 1024 * 1024
 PREVIEW_EDGE = 1000
@@ -52,6 +55,47 @@ def clean_parameters(method, values):
                 value = int(value)
         result[key] = value
     return result
+
+
+def index_jobs(jobs):
+    if not isinstance(jobs, list) or len(jobs) > 12:
+        raise ValueError("Use at most 12 result widgets.")
+    by_id = {}
+    for job in jobs:
+        identifier = job.get("id") if isinstance(job, dict) else None
+        if not isinstance(identifier, str) or not identifier or identifier == "source" or identifier in by_id:
+            raise ValueError("Invalid result widget.")
+        if not isinstance(job.get("input", "source"), str):
+            raise ValueError("Invalid input image.")
+        by_id[identifier] = job
+    return by_id
+
+
+def job_chain(jobs, target):
+    chain = []
+    seen = set()
+    while target != "source":
+        if target in seen:
+            raise ValueError("The method inputs form a loop.")
+        job = jobs.get(target)
+        if job is None:
+            raise ValueError("The selected input image is missing.")
+        chain.append(job)
+        seen.add(target)
+        target = job.get("input", "source")
+    return chain[::-1]
+
+
+def uses_reference(job):
+    params = job.get("params", {})
+    match job["method"]:
+        case "arithmetic":
+            return params.get("operand") == "Reference photo"
+        case "matching":
+            return params.get("variant") == "Reference photo"
+        case "boolean":
+            return params.get("variant", "NOT") in ("AND", "OR", "XOR")
+    return False
 
 
 def decode_photo(data):
@@ -215,8 +259,21 @@ class Engine:
         p = clean_parameters(method, job.get("params", {}))
         if "workingLimit" in method:
             source = basic.shrink(source, method["workingLimit"])
+        if source.ndim == 2 and key in COLOR_INPUTS:
+            source = cv.cvtColor(source, cv.COLOR_GRAY2BGR)
         value = FUNCTIONS[key](source, p, reference)
         return value if isinstance(value, tuple) else (value, {})
+
+    def apply_chain(self, chain, source, reference):
+        details = {}
+        for job in chain:
+            source, details = self.apply(job, source, reference)
+        return source, details
+
+    def full_reference(self, chain):
+        if self.reference_bytes and any(uses_reference(job) for job in chain):
+            return decode_photo(self.reference_bytes)
+        return self.reference
 
     def render(self, request, payload):
         start = perf_counter()
@@ -227,29 +284,60 @@ class Engine:
             source = self.preview
         if source is None:
             raise ValueError("Open a photo or start the webcam first.")
-        jobs = request.get("jobs", [])
-        if not isinstance(jobs, list) or len(jobs) > 12:
-            raise ValueError("Use at most 12 result widgets.")
+        jobs = index_jobs(request.get("jobs", []))
+        output_ids = request.get("outputIds", list(jobs))
+        if (not isinstance(output_ids, list) or len(output_ids) > len(jobs)
+                or any(not isinstance(key, str) or key not in jobs for key in output_ids)):
+            raise ValueError("Invalid result selection.")
+        outputs = set(output_ids)
         inspect = request.get("inspect") if isinstance(request.get("inspect"), str) else None
         requested = request.get("inspectMany")
         inspect_many = {key for key in requested[:13] if isinstance(key, str)} if isinstance(requested, list) else set()
         if inspect is not None:
             inspect_many.add(inspect)
         stats_by_id = {"source": statistics(source)} if "source" in inspect_many else {}
+        plan = {}
+        for identifier in dict.fromkeys([*output_ids, *(key for key in jobs if key in inspect_many)]):
+            for job in job_chain(jobs, identifier):
+                plan[job["id"]] = job
+        # Hold raw pixels only until their last consumer, and encode previews only for requested outputs.
+        consumers = Counter(job.get("input", "source") for job in plan.values())
+        images, failures = {}, {}
+        full = None
         reply = Reply()
-        issues = []
-        for job in jobs:
-            identifier = job["id"]
+        for identifier, job in plan.items():
+            input_id = job.get("input", "source")
             try:
                 begin = perf_counter()
-                # Reading embedded data requires the original pixel grid, even in preview.
-                exact = job["method"] == "lsb" and job.get("params", {}).get("variant") == "Read" and not payload
-                image, details = self.apply(job, self.full_source() if exact else source, self.reference)
-                reply.preview(identifier, image, (perf_counter() - begin) * 1000, details)
+                # Read embedded data on the full pixel grid, including any preceding methods.
+                exact = not payload and job["method"] == "lsb" and job.get("params", {}).get("variant") == "Read"
+                if exact:
+                    if full is None:
+                        full = self.full_source()
+                    chain = job_chain(jobs, identifier)
+                    image, details = self.apply_chain(chain, full, self.full_reference(chain))
+                elif input_id in failures:
+                    failures[identifier] = failures[input_id]
+                    continue
+                else:
+                    image, details = self.apply(job, source if input_id == "source" else images[input_id], self.reference)
+                if identifier in outputs:
+                    reply.preview(identifier, image, (perf_counter() - begin) * 1000, details)
                 if identifier in inspect_many:
                     stats_by_id[identifier] = statistics(basic.shrink(image, PREVIEW_EDGE))
+                if consumers[identifier]:
+                    images[identifier] = image
             except (ValueError, cv.error) as error:
-                issues.append({"id": identifier, "message": str(error).splitlines()[0][:280]})
+                failures[identifier] = str(error).splitlines()[0][:240]
+            finally:
+                consumers[input_id] -= 1
+                if not consumers[input_id]:
+                    images.pop(input_id, None)
+        issues = []
+        for identifier, reason in failures.items():
+            if identifier in outputs or identifier in inspect_many:
+                prefix = "Input image failed. " if plan[identifier].get("input", "source") in failures else ""
+                issues.append({"id": identifier, "message": prefix + reason})
         return {"items": reply.items, "issues": issues, "stats": stats_by_id.get(inspect), "statsById": stats_by_id,
                 "engineMs": round((perf_counter() - start) * 1000, 2),
                 "width": source.shape[1], "height": source.shape[0]}, reply.parts
@@ -258,18 +346,19 @@ class Engine:
         source = self.full_source()
         if source is None:
             raise ValueError("There is no frame to save yet.")
-        job = request.get("job")
+        target = request.get("target", "source")
+        if not isinstance(target, str):
+            raise ValueError("Choose a result to save.")
+        chain = job_chain(index_jobs(request.get("jobs", [])), target)
         ext = request["extension"]
-        if job and job["method"] == "compression":
-            codec_ext, data = advanced.encode_codec(source, clean_parameters(METHODS["compression"], job["params"]))
-            if codec_ext == ext:
-                return {"width": source.shape[1], "height": source.shape[0]}, [data]
-        if job:
-            # Only methods with a reference operand need the original reference decoded.
-            uses_reference = (job.get("params", {}).get("operand") == "Reference photo"
-                              or job.get("params", {}).get("variant") == "Reference photo"
-                              or (job["method"] == "boolean" and job.get("params", {}).get("variant") != "NOT"))
-            reference = decode_photo(self.reference_bytes) if uses_reference and self.reference_bytes else self.reference
+        if chain:
+            reference = self.full_reference(chain)
+            source, _ = self.apply_chain(chain[:-1], source, reference)
+            job = chain[-1]
+            if job["method"] == "compression":
+                codec_ext, data = advanced.encode_codec(source, clean_parameters(METHODS["compression"], job["params"]))
+                if codec_ext == ext:
+                    return {"width": source.shape[1], "height": source.shape[0]}, [data]
             source, _ = self.apply(job, source, reference)
         return {"width": source.shape[1], "height": source.shape[0]}, [encode(source, ext)]
 

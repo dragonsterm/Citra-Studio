@@ -136,7 +136,8 @@ def noise(image, p, reference):
             y = gray(image).astype(np.float32)
             scale = max(0.04, 1 - strength)
             offsets = rng.poisson(y * scale) / scale - y
-    return byte(image.astype(np.float32) + offsets.astype(np.float32)[:, :, None])
+    offsets = offsets.astype(np.float32)
+    return byte(image.astype(np.float32) + (offsets[:, :, None] if image.ndim == 3 else offsets))
 
 
 def denoise(image, p, reference):
@@ -440,7 +441,7 @@ def encode_codec(image, p):
 
 def compression(image, p, reference):
     _, encoded = encode_codec(image, p)
-    output = cv.imdecode(encoded, cv.IMREAD_COLOR)
+    output = cv.imdecode(encoded, cv.IMREAD_GRAYSCALE if image.ndim == 2 else cv.IMREAD_COLOR)
     return output, {"Encoded bytes": int(encoded.size), "Raw / encoded": f"{image.nbytes / encoded.size:.2f}×",
                     "PSNR": quality(image, output)}
 

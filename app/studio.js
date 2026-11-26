@@ -15,6 +15,7 @@ const state = {
   collapsed: new Set(["geometry", "color", "edges", "frequency", "restore", "regions", "coding"]),
   widgets: [],
   selected: "source",
+  newInput: "source",
   nextId: 1,
   generation: 0,
   kind: "idle",
@@ -52,7 +53,38 @@ function selectedWidget() {
 }
 
 function jobFor(widget) {
-  return { id: widget.id, method: widget.method.id, params: { ...widget.params } };
+  return { id: widget.id, input: widget.input, method: widget.method.id, params: { ...widget.params } };
+}
+
+function widgetName(widget) {
+  const duplicate = state.widgets.some((other) => other !== widget && other.method === widget.method);
+  return duplicate ? widget.method.name + " #" + widget.id.slice(1) : widget.method.name;
+}
+
+function inputName(id) {
+  const widget = state.widgets.find((item) => item.id === id);
+  return widget ? widgetName(widget) : "Original source";
+}
+
+function dependentIds(ids) {
+  const affected = new Set(ids);
+  for (const id of affected) {
+    for (const widget of state.widgets) {
+      if (widget.input === id) affected.add(widget.id);
+    }
+  }
+  return affected;
+}
+
+function invalidateResults(ids, clearPreviews = false) {
+  const affected = dependentIds(ids);
+  for (const widget of state.widgets) {
+    if (!affected.has(widget.id)) continue;
+    widget.revision++;
+    widget.error = null;
+    widget.result = null;
+    if (clearPreviews) placeholder(widget.tile, "Waiting for processing…");
+  }
 }
 
 function parameterDefaults(method) {
@@ -181,10 +213,11 @@ function makeTile(widget) {
   label.title = "Select or drag to move. Alt+arrow keys also move this widget.";
   label.setAttribute("aria-pressed", "false");
   const mark = icon(widget ? widget.method.icon : "image");
-  label.append(mark, element("span", "", title));
+  const labelText = element("span", "", title);
+  label.append(mark, labelText);
   label.addEventListener("click", () => selectWidget(id));
   const save = button("download", "Save " + title.toLowerCase());
-  save.addEventListener("click", () => saveResult(widget));
+  save.addEventListener("click", () => saveResult(widget ?? null));
   const pin = button("pin", "Pin " + title.toLowerCase());
   pin.dataset.cardPin = title.toLowerCase();
   pin.setAttribute("aria-pressed", "false");
@@ -225,8 +258,9 @@ function makeTile(widget) {
   media.addEventListener("click", () => selectWidget(id));
   const meta = element("footer", "tile-meta");
   const dimensions = element("span", "", "—");
+  const input = widget ? element("span", "tile-input") : null;
   const timing = element("span", "", widget ? "—" : "Original");
-  meta.append(dimensions, timing);
+  meta.append(dimensions, ...(input ? [input] : []), timing);
   const grip = button("grip", "Drag to resize. Press Enter to change width.", "resize-grip");
   node.append(header, media, meta, grip);
 
@@ -274,7 +308,8 @@ function makeTile(widget) {
     setSize(1);
     node.style.removeProperty("--tile-height");
   });
-  return { node, img, video, mark, placeholder, placeholderMark, placeholderText, dimensions, timing, label, save, expand, url: null };
+  return { node, img, video, mark, placeholder, placeholderMark, placeholderText, dimensions, input, timing,
+    label, labelText, save, expand, url: null };
 }
 
 const sourceTile = makeTile();
@@ -315,8 +350,8 @@ function comparisonSnapshot() {
       .slice(0, 2)
       .map((spec) => spec.type === "select" ? values[spec.key] : spec.label + " " + values[spec.key]);
     items.push({
-      id: widget.id, title: widget.method.name, icon: widget.method.icon,
-      description: description.join(" · ") || "Fixed calculation",
+      id: widget.id, title: widgetName(widget), icon: widget.method.icon,
+      description: ["From " + inputName(widget.input), ...description].join(" · "),
       sample: entry ? { stats: entry.stats, ms: entry.ms, error: entry.error } : null,
     });
   }
@@ -378,6 +413,43 @@ function selectWidget(id) {
   }
 }
 
+function drawInputOptions(select, active, excluded = new Set()) {
+  const options = [new Option("Original source", "source")];
+  for (const widget of state.widgets) {
+    if (!excluded.has(widget.id)) options.push(new Option(widgetName(widget), widget.id));
+  }
+  select.replaceChildren(...options);
+  select.value = active;
+}
+
+function drawWidgetInput(widget) {
+  $("method-input-row").hidden = !widget;
+  if (widget) drawInputOptions($("method-input"), widget.input, dependentIds([widget.id]));
+}
+
+function drawInputs() {
+  drawInputOptions($("new-method-input"), state.newInput);
+  for (const widget of state.widgets) {
+    widget.tile.labelText.textContent = widgetName(widget);
+    const label = "From " + inputName(widget.input);
+    widget.tile.input.textContent = widget.tile.input.title = label;
+  }
+  $("inspect-title").textContent = inputName(state.selected);
+  drawWidgetInput(selectedWidget());
+}
+
+function changeWidgetInput() {
+  const widget = selectedWidget();
+  const input = $("method-input").value;
+  if (!widget || !input || widget.input === input || dependentIds([widget.id]).has(input)) return;
+  widget.input = input;
+  invalidateResults([widget.id], true);
+  drawInputs();
+  drawStatistics();
+  comparison.refresh();
+  scheduleStill();
+}
+
 function addWidgets(ids) {
   let last;
   for (const id of ids) {
@@ -387,7 +459,7 @@ function addWidgets(ids) {
       notify("The workspace holds up to 12 result widgets.", true);
       break;
     }
-    const widget = { id: "w" + state.nextId++, method, params: parameterDefaults(method), revision: 0,
+    const widget = { id: "w" + state.nextId++, input: state.newInput, method, params: parameterDefaults(method), revision: 0,
       rendered: -1, result: null, error: null };
     widget.tile = makeTile(widget);
     state.widgets.push(widget);
@@ -397,9 +469,10 @@ function addWidgets(ids) {
   if (!last) return;
   state.marked.clear();
   drawBatch();
-  comparison.refresh();
   syncStage();
   selectWidget(last.id);
+  drawInputs();
+  comparison.refresh();
   addEvent(last.method.name + (ids.length > 1 ? " and selected methods added." : " added."));
   if (state.kind === "idle") notify("Method queued. Choose a source to start.");
   scheduleStill();
@@ -409,12 +482,19 @@ function removeWidget(id) {
   const index = state.widgets.findIndex((widget) => widget.id === id);
   if (index < 0) return;
   const [widget] = state.widgets.splice(index, 1);
+  if (state.newInput === id) state.newInput = widget.input;
+  const reassigned = state.widgets.filter((item) => item.input === id);
+  for (const item of reassigned) item.input = widget.input;
+  invalidateResults(reassigned.map((item) => item.id), true);
   clearPreview(widget.tile);
   workspaceBoard.remove(id);
   state.samples.delete(id);
-  comparison.refresh();
   if (state.selected === id) selectWidget(state.widgets[Math.min(index, state.widgets.length - 1)]?.id || "source");
+  drawInputs();
+  drawStatistics();
+  comparison.refresh();
   addEvent(widget.method.name + " removed.");
+  if (reassigned.length) notify("Dependent methods now use " + inputName(widget.input) + ".");
   syncStage();
   scheduleStill();
 }
@@ -537,9 +617,8 @@ function openSample() {
 }
 
 function invalidateReferenceResults() {
-  for (const widget of state.widgets) {
-    if (["arithmetic", "boolean", "matching"].includes(widget.method.id)) widget.revision++;
-  }
+  const affected = state.widgets.filter((widget) => ["arithmetic", "boolean", "matching"].includes(widget.method.id));
+  invalidateResults(affected.map((widget) => widget.id));
   const reference = state.reference;
   $("reference-caption").textContent = reference
     ? reference.name + " · " + dimensionsText(reference)
@@ -670,10 +749,11 @@ function freezeFrame() {
 
 function saveResult(widget = selectedWidget()) {
   if (state.kind === "idle" || (state.kind === "live" && !state.liveFrames)) return;
+  const title = state.kind === "photo" ? state.source.name.replace(/\.[^.]+$/, "") : state.source.name;
+  const suffix = widget ? widgetName(widget) : "Original";
+  const request = { target: widget?.id || "source", jobs: widget ? state.widgets.map(jobFor) : [] };
   return withTask(async () => {
-    const title = state.kind === "photo" ? state.source.name.replace(/\.[^.]+$/, "") : state.source.name;
-    const suffix = widget ? widget.method.name : "Original";
-    const saved = await api.save(widget ? jobFor(widget) : null, title + " - " + suffix);
+    const saved = await api.save(request, title + " - " + suffix);
     if (saved) {
       addEvent("Saved " + saved.name + " (" + dimensionsText(saved) + ").");
       notify("Saved " + saved.name);
@@ -738,7 +818,7 @@ function scheduleFrame() {
 function process(widgets, inspectMany, frame) {
   const generation = state.generation;
   const revisions = new Map(widgets.map((widget) => [widget.id, widget.revision]));
-  const request = { jobs: widgets.map(jobFor), inspectMany };
+  const request = { jobs: state.widgets.map(jobFor), outputIds: widgets.map((widget) => widget.id), inspectMany };
   if (frame) Object.assign(request, { width: frame.width, height: frame.height });
   const begin = performance.now();
   state.work = api.render(request, frame?.pixels).then((reply) => {
@@ -844,12 +924,13 @@ function setTab(tab) {
 
 function drawInspection() {
   const widget = selectedWidget();
-  $("inspect-title").textContent = widget?.method.name || "Original source";
+  $("inspect-title").textContent = inputName(state.selected);
   $("inspect-description").textContent = widget?.method.description ||
     (state.kind === "idle" ? "Open a source to view its pixel distribution." : "Pixel statistics for the active photo or webcam frame.");
   $("formula").hidden = !widget;
   $("formula").textContent = widget?.method.formula || "";
   $("params-section").hidden = !widget;
+  drawWidgetInput(widget);
   drawParameters(widget);
   drawStatistics();
 }
@@ -887,14 +968,13 @@ function drawParameters(widget) {
     input.value = widget.params[spec.key];
     input.addEventListener("input", () => {
       widget.params[spec.key] = spec.type === "range" ? Number(input.value) : input.value;
-      widget.revision++;
-      widget.error = null;
       if (output) output.value = input.value;
       if (widget.method.id === "channel") restrictChannels(widget);
       for (const item of widget.method.params) {
         const row = parameters.querySelector('[data-param="' + item.key + '"]');
         if (row) row.hidden = !relevant(item, widget);
       }
+      invalidateResults([widget.id]);
       scheduleStill(spec.type === "text" ? 165 : 30);
     });
     label.append(heading, input);
@@ -917,8 +997,7 @@ function resetParameters() {
   const widget = selectedWidget();
   if (!widget) return;
   widget.params = parameterDefaults(widget.method);
-  widget.revision++;
-  widget.error = null;
+  invalidateResults([widget.id]);
   drawParameters(widget);
   scheduleStill();
 }
@@ -1076,6 +1155,8 @@ for (const [id, handler] of Object.entries({
 })) $(id).addEventListener("click", handler);
 
 $("search").addEventListener("input", drawLibrary);
+$("new-method-input").addEventListener("change", (event) => { state.newInput = event.target.value; });
+$("method-input").addEventListener("change", changeWidgetInput);
 $("search").addEventListener("keydown", (event) => {
   if (event.key === "Enter") document.querySelector(".method-items:not([hidden]) .method-row")?.focus();
   if (event.key === "Escape") { $("search").value = ""; drawLibrary(); }

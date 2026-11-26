@@ -35,7 +35,7 @@ if (window.location.pathname.endsWith("/comparison.html")) {
     clear: () => ask("clear"),
     snapshot: (dimensions, data) => ask("snapshot", dimensions, data),
     render: (request, bytes) => ask("render", request, bytes),
-    save: (job, name) => ask("export", job, name),
+    save: (request, name) => ask("export", request, name),
     window: (action) => ask("window", action),
     onAction: (callback) => watch("action", callback),
     onWindowState: (callback) => watch("window-state", callback),
